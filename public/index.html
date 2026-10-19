@@ -915,7 +915,54 @@
     let activeChunkPromises = [];
     let currentAudioLevel = 0;
     let maxSessionLevel = 0;
+    let currentChunkLevel = 0;
+    let baseTextBeforeSession = '';
+    let completedChunksMap = new Map();
+    let activeUploadsCount = 0;
+    const uploadWaitQueue = [];
     let wakeLockSentinel = null;
+
+    function acquireUploadSlot() {
+      if (activeUploadsCount < 2) {
+        activeUploadsCount++;
+        return Promise.resolve();
+      }
+      return new Promise((resolve) => uploadWaitQueue.push(resolve));
+    }
+
+    function releaseUploadSlot() {
+      if (uploadWaitQueue.length > 0) {
+        const next = uploadWaitQueue.shift();
+        next();
+      } else {
+        activeUploadsCount = Math.max(0, activeUploadsCount - 1);
+      }
+    }
+
+    function isWhisperSilenceHallucination(text, chunkPeak) {
+      if (!text || !text.trim()) return true;
+      const t = text.trim();
+      if (chunkPeak < 0.055) {
+        if (/^(thank you\.?|thanks for watching!?|gracias\.?|muchas gracias\.?)$/i.test(t) ||
+            /amara\.org|subtítulos realizados/i.test(t)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function recordProgressiveChunkCheckpoint(index, chunkText) {
+      if (!chunkText || !chunkText.trim()) return;
+      completedChunksMap.set(index, chunkText.trim());
+      const sortedIndices = Array.from(completedChunksMap.keys()).sort((a, b) => a - b);
+      const joinedSoFar = sortedIndices.map(k => completedChunksMap.get(k)).join(' ').trim();
+      const combined = baseTextBeforeSession ? (baseTextBeforeSession + ' ' + joinedSoFar) : joinedSoFar;
+
+      txtResult.value = combined;
+      try { localStorage.setItem(STORAGE_TEXT_BACKUP, combined); } catch (e) {}
+      updateWordCount();
+      syncQuickCard();
+    }
 
     const pillStage = document.getElementById('pillStage');
     const dynamicIsland = document.getElementById('dynamicIsland');
@@ -1089,10 +1136,13 @@
       }
     }
 
-    // Re-adquirir Wake Lock si el usuario cambia de pestaña y vuelve en tablet/móvil
+    // Re-adquirir Wake Lock y AudioContext si el usuario cambia de pestaña o llega una notificación en tablet/móvil
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && isRecording && !isPaused) {
         requestWakeLock();
+        if (audioContext && audioContext.state !== 'running') {
+          try { audioContext.resume(); } catch (e) {}
+        }
       }
     });
 
@@ -1179,16 +1229,21 @@
         if (!append) {
           txtResult.value = '';
           localStorage.removeItem(STORAGE_TEXT_BACKUP);
+          baseTextBeforeSession = '';
           accumulatedMs = 0;
           updateWordCount();
           syncQuickCard();
           updateTimerDisplay(0);
+        } else {
+          baseTextBeforeSession = txtResult.value.trim();
         }
 
+        completedChunksMap.clear();
         currentPcmSamples = [];
         currentSamplesCount = 0;
         currentChunkIndex = 0;
         maxSessionLevel = 0;
+        currentChunkLevel = 0;
         activeChunkPromises = [];
 
         mediaStream = await acquireMicrophoneStream();
@@ -1196,6 +1251,13 @@
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         audioContext = new AudioCtx();
         if (audioContext.state === 'suspended') await audioContext.resume();
+
+        // Auto-recuperación si iOS/Android interrumpe el AudioContext por una notificación
+        audioContext.onstatechange = () => {
+          if (isRecording && !isPaused && audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+            audioContext.resume().catch(() => {});
+          }
+        };
 
         const inputRate = audioContext.sampleRate;
         mediaSource = audioContext.createMediaStreamSource(mediaStream);
@@ -1218,6 +1280,7 @@
           }
           currentAudioLevel = Math.min(1.0, maxPeak * 2.8);
           if (currentAudioLevel > maxSessionLevel) maxSessionLevel = currentAudioLevel;
+          if (currentAudioLevel > currentChunkLevel) currentChunkLevel = currentAudioLevel;
 
           const downsampled = downsampleBuffer(inputData, inputRate, TARGET_SAMPLE_RATE);
           currentPcmSamples.push(downsampled);
@@ -1242,7 +1305,7 @@
 
         setStatus(
           append ? 'Siguiendo' : 'Grabando',
-          append ? 'Se añadirá al final de tu texto actual' : 'Corte automático cada 2 min (< 22 MB)',
+          append ? 'Se añadirá al final de tu texto actual' : 'Corte y autoguardado cada 2 min (< 22 MB)',
           'rec'
         );
         syncButtonsUI();
@@ -1278,22 +1341,31 @@
     function dispatchCurrentTwoMinuteChunk() {
       if (currentSamplesCount === 0 || currentPcmSamples.length === 0) return;
 
+      const chunkPeakSnapshot = currentChunkLevel;
+      currentChunkLevel = 0;
+
       const samples = currentPcmSamples;
       const total = currentSamplesCount;
       currentPcmSamples = [];
       currentSamplesCount = 0;
 
       const chunkIdx = ++currentChunkIndex;
+
+      // Si este bloque de 2 min estuvo en silencio absoluto, omitir para evitar alucinaciones
+      if (chunkPeakSnapshot < 0.022) {
+        return;
+      }
+
       const wavBlob = encodeWavFromFloat32Chunks(samples, total, TARGET_SAMPLE_RATE);
       const sizeMb = (wavBlob.size / (1024 * 1024)).toFixed(1);
 
       setStatus(
         `Tramo #${chunkIdx + 1}`,
-        `Transcribiendo tramo #${chunkIdx} (${sizeMb} MB) en segundo plano...`,
+        `Autoguardando tramo #${chunkIdx} (${sizeMb} MB) en 2º plano...`,
         'rec'
       );
 
-      activeChunkPromises.push(sendWavChunkToWhisper(wavBlob, chunkIdx));
+      activeChunkPromises.push(sendWavChunkToWhisper(wavBlob, chunkIdx, chunkPeakSnapshot));
     }
 
     async function stopRecordingAndTranscribe() {
@@ -1325,11 +1397,18 @@
         }
 
         if (currentSamplesCount > TARGET_SAMPLE_RATE / 5) {
-          const chunkIdx = ++currentChunkIndex;
-          const wavBlob = encodeWavFromFloat32Chunks(currentPcmSamples, currentSamplesCount, TARGET_SAMPLE_RATE);
+          const finalChunkPeak = currentChunkLevel;
+          const samples = currentPcmSamples;
+          const total = currentSamplesCount;
           currentPcmSamples = [];
           currentSamplesCount = 0;
-          activeChunkPromises.push(sendWavChunkToWhisper(wavBlob, chunkIdx));
+          currentChunkLevel = 0;
+
+          if (finalChunkPeak >= 0.022) {
+            const chunkIdx = ++currentChunkIndex;
+            const wavBlob = encodeWavFromFloat32Chunks(samples, total, TARGET_SAMPLE_RATE);
+            activeChunkPromises.push(sendWavChunkToWhisper(wavBlob, chunkIdx, finalChunkPeak));
+          }
         }
 
         cleanupAudioResources();
@@ -1344,16 +1423,11 @@
 
         const errors = results.filter(r => !r.success).map(r => r.error);
         const texts = results.filter(r => r.success && r.text.trim()).map(r => r.text.trim());
-        let newTranscript = texts.join(' ').trim();
-
-        if (maxSessionLevel < 0.05 && /^(thank you\.?|gracias\.?)$/i.test(newTranscript)) {
-          newTranscript = '';
-        }
+        const newTranscript = texts.join(' ').trim();
 
         if (newTranscript) {
-          const existing = txtResult.value.trim();
-          txtResult.value = (appendMode && existing) ? (existing + ' ' + newTranscript) : newTranscript;
-          localStorage.setItem(STORAGE_TEXT_BACKUP, txtResult.value);
+          txtResult.value = baseTextBeforeSession ? (baseTextBeforeSession + ' ' + newTranscript) : newTranscript;
+          try { localStorage.setItem(STORAGE_TEXT_BACKUP, txtResult.value); } catch (e) {}
           updateWordCount();
           syncQuickCard();
           txtResult.scrollTop = txtResult.scrollHeight;
@@ -1361,7 +1435,11 @@
           const copiedAuto = await copyTextSilently(txtResult.value);
           if (copiedAuto) {
             flashCopyFeedback();
-            setStatus('Copiado', 'Listo para pegar o seguir grabando', 'done');
+            setStatus(
+              errors.length > 0 ? `Copiado (${errors.length} aviso)` : 'Copiado',
+              'Listo para pegar o seguir grabando',
+              'done'
+            );
             showIslandToast('✓ Copiado automáticamente al portapapeles');
           } else {
             setStatus('Listo', 'Toca "Copiar al Portapapeles" abajo', 'done');
@@ -1380,42 +1458,74 @@
       }
     }
 
-    async function sendWavChunkToWhisper(wavBlob, index) {
-      const localKey = getLocalApiKey();
+    async function sendWavChunkToWhisper(wavBlob, index, chunkPeak) {
+      await acquireUploadSlot();
+      try {
+        const localKey = getLocalApiKey();
+        const MAX_ATTEMPTS = 4;
 
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          if (localKey) {
-            const formData = new FormData();
-            formData.append('file', wavBlob, `chunk_${index}.wav`);
-            formData.append('model', 'whisper-large-v3');
-            formData.append('temperature', '0');
-            formData.append('response_format', 'json');
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-            const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${localKey}` },
-              body: formData
-            });
+          try {
+            let res;
+            if (localKey) {
+              const formData = new FormData();
+              formData.append('file', wavBlob, `chunk_${index}.wav`);
+              formData.append('model', 'whisper-large-v3');
+              formData.append('temperature', '0');
+              formData.append('response_format', 'json');
 
+              res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localKey}` },
+                body: formData,
+                signal: controller.signal
+              });
+            } else {
+              res = await fetch('/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'audio/wav' },
+                body: wavBlob,
+                signal: controller.signal
+              });
+            }
+
+            clearTimeout(timeoutId);
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((data.error && data.error.message) || `Error HTTP ${res.status}`);
-            return { index, success: true, text: data.text || '' };
-          } else {
-            const res = await fetch('/api/transcribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'audio/wav' },
-              body: wavBlob
-            });
 
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || `Error HTTP ${res.status}`);
-            return { index, success: true, text: data.text || '' };
+            if (!res.ok) {
+              const status = res.status;
+              const errMsg = (data.error && (data.error.message || data.error)) || `Error HTTP ${status}`;
+              if (attempt < MAX_ATTEMPTS && (status === 429 || status >= 500 || status === 408)) {
+                const retryAfterSec = parseInt(res.headers.get('retry-after') || '0', 10);
+                const waitMs = retryAfterSec > 0 ? Math.min(15000, retryAfterSec * 1000) : attempt * 1600;
+                await new Promise(r => setTimeout(r, waitMs));
+                continue;
+              }
+              return { index, success: false, error: String(errMsg) };
+            }
+
+            let text = (data && data.text) ? String(data.text) : '';
+            if (isWhisperSilenceHallucination(text, chunkPeak)) {
+              text = '';
+            }
+            if (text.trim()) {
+              recordProgressiveChunkCheckpoint(index, text);
+            }
+            return { index, success: true, text };
+          } catch (err) {
+            clearTimeout(timeoutId);
+            if (attempt >= MAX_ATTEMPTS) {
+              return { index, success: false, error: err.name === 'AbortError' ? 'Tiempo de espera agotado' : (err.message || 'Error de red') };
+            }
+            await new Promise(r => setTimeout(r, attempt * 1400));
           }
-        } catch (err) {
-          if (attempt >= 2) return { index, success: false, error: err.message || 'Error de red' };
-          await new Promise(r => setTimeout(r, 900));
         }
+        return { index, success: false, error: 'Fallo tras múltiples reintentos' };
+      } finally {
+        releaseUploadSlot();
       }
     }
 

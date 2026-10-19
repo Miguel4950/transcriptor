@@ -4,7 +4,8 @@
 export const config = {
   api: {
     bodyParser: false
-  }
+  },
+  maxDuration: 60
 };
 
 function readRawBody(req) {
@@ -43,13 +44,17 @@ export default async function handler(req, res) {
 
     if (!apiKey) {
       return res.status(401).json({
-        error: 'Configura GROQ_API_KEY en Vercel o pega tu clave en el botón 🔑 de la píldora.'
+        error: 'Configura GROQ_API_KEY en Vercel o pega tu clave en el botón Clave API de la píldora.'
       });
     }
 
     const audioBuffer = await readRawBody(req);
     if (!audioBuffer || audioBuffer.length < 100) {
       return res.status(400).json({ error: 'Audio vacío o demasiado corto.' });
+    }
+
+    if (audioBuffer.length > 22 * 1024 * 1024) {
+      return res.status(413).json({ error: 'El tramo supera el límite seguro de 22 MB.' });
     }
 
     const boundary = '----TranscriptorBoundary' + Date.now().toString(16);
@@ -78,32 +83,47 @@ export default async function handler(req, res) {
 
     const multipartBody = Buffer.concat([partFileHeader, audioBuffer, partFields]);
 
-    const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        'Content-Length': String(multipartBody.length)
-      },
-      body: multipartBody
-    });
+    let lastStatus = 500;
+    let lastError = 'Error al contactar con Groq Whisper';
 
-    const responseText = await groqResponse.text();
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      data = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': String(multipartBody.length)
+        },
+        body: multipartBody
+      });
+
+      const responseText = await groqResponse.text();
+      let data = null;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = null;
+      }
+
+      if (groqResponse.ok) {
+        return res.status(200).json({
+          text: (data && data.text) ? data.text : ''
+        });
+      }
+
+      lastStatus = groqResponse.status;
+      lastError = (data && data.error && data.error.message) || responseText || `Error HTTP ${groqResponse.status}`;
+
+      if (attempt < 3 && (lastStatus === 429 || lastStatus >= 500)) {
+        const retryAfterSec = parseInt(groqResponse.headers.get('retry-after') || '0', 10);
+        const waitMs = retryAfterSec > 0 ? Math.min(10000, retryAfterSec * 1000) : attempt * 1500;
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      break;
     }
 
-    if (!groqResponse.ok) {
-      const msg = (data && data.error && data.error.message) || responseText || `Error HTTP ${groqResponse.status}`;
-      return res.status(groqResponse.status).json({ error: msg });
-    }
-
-    return res.status(200).json({
-      text: (data && data.text) ? data.text : ''
-    });
+    return res.status(lastStatus).json({ error: lastError });
   } catch (err) {
     return res.status(500).json({
       error: err && err.message ? err.message : 'Error interno procesando el audio'
