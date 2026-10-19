@@ -116,7 +116,7 @@ namespace TranscriptorApp
         private List<Task<ChunkResult>> activeChunkTasks = new List<Task<ChunkResult>>();
 
         public event Action<double> OnAudioLevel;
-        public event Action<string, string, string> OnStatusChanged; // title, subtitle, stateTag ("idle", "rec", "pause", "work", "done", "err")
+        public event Action<string, string, string> OnStatusChanged; // title, subtitle, tag ("idle", "rec", "pause", "work", "done", "err")
         public event Action<string> OnTextUpdated;
         public event Action OnStateChanged;
 
@@ -172,8 +172,8 @@ namespace TranscriptorApp
                     return false;
                 }
 
-                int bufferSize = BYTES_PER_SECOND / 10; // Buffers de 100 ms para respuesta ultra fluida
-                waveBuffers = new WaveBuffer[20];
+                int bufferSize = BYTES_PER_SECOND / 12; // ~83ms por buffer para respuesta inmediata
+                waveBuffers = new WaveBuffer[24];
                 for (int i = 0; i < waveBuffers.Length; i++)
                 {
                     waveBuffers[i] = new WaveBuffer(hWaveIn, bufferSize);
@@ -195,8 +195,8 @@ namespace TranscriptorApp
                 if (OnStatusChanged != null)
                 {
                     OnStatusChanged(
-                        append ? "Continuando grabaciÃ³n" : "Grabando",
-                        append ? "Se aÃ±adirÃ¡ al final de tu texto actual" : "Corte automÃ¡tico cada 2 min (< 22 MB)",
+                        append ? "Siguiendo" : "Grabando",
+                        append ? "AÃ±adiendo al final de tu texto actual" : "Corte automÃ¡tico cada 2 min (< 22 MB)",
                         "rec"
                     );
                 }
@@ -220,7 +220,7 @@ namespace TranscriptorApp
             waveInStop(hWaveIn);
 
             if (OnAudioLevel != null) OnAudioLevel(0);
-            if (OnStatusChanged != null) OnStatusChanged("En pausa", "Pulsa 'Seguir Grabando' para reanudar o 'Finalizar'", "pause");
+            if (OnStatusChanged != null) OnStatusChanged("Pausado", "Pulsa â–¶ para seguir hablando o â–  para transcribir", "pause");
             if (OnStateChanged != null) OnStateChanged();
         }
 
@@ -241,6 +241,7 @@ namespace TranscriptorApp
             if (!IsRecording || hWaveIn == IntPtr.Zero) return;
 
             int maxSample = 0;
+            bool readAnyBuffer = false;
             if (waveBuffers != null)
             {
                 for (int i = 0; i < waveBuffers.Length; i++)
@@ -248,6 +249,7 @@ namespace TranscriptorApp
                     WaveBuffer buf = waveBuffers[i];
                     if (buf != null && buf.IsDone)
                     {
+                        readAnyBuffer = true;
                         int peak;
                         byte[] recorded = buf.ReadRecordedBytes(out peak);
                         if (peak > maxSample) maxSample = peak;
@@ -273,9 +275,9 @@ namespace TranscriptorApp
             {
                 if (OnAudioLevel != null) OnAudioLevel(0);
             }
-            else
+            else if (readAnyBuffer)
             {
-                double norm = Math.Min(1.0, maxSample / 14000.0);
+                double norm = Math.Min(1.0, maxSample / 13000.0);
                 if (OnAudioLevel != null) OnAudioLevel(norm);
             }
         }
@@ -293,8 +295,8 @@ namespace TranscriptorApp
             if (OnStatusChanged != null)
             {
                 OnStatusChanged(
-                    string.Format("Grabando (Tramo #{0})", chunkIdx + 1),
-                    string.Format("Transcribiendo tramo #{0} ({1:F1} MB) en segundo plano...", chunkIdx, wavBytes.Length / (1024.0 * 1024.0)),
+                    string.Format("Tramo #{0}", chunkIdx + 1),
+                    string.Format("Enviando tramo #{0} ({1:F1} MB) en segundo plano...", chunkIdx, wavBytes.Length / (1024.0 * 1024.0)),
                     "rec"
                 );
             }
@@ -315,7 +317,7 @@ namespace TranscriptorApp
             IsProcessing = true;
 
             if (OnAudioLevel != null) OnAudioLevel(0);
-            if (OnStatusChanged != null) OnStatusChanged("Transcribiendo...", "Procesando con Whisper Large v3...", "work");
+            if (OnStatusChanged != null) OnStatusChanged("Transcribiendo", "Procesando con Whisper Large v3...", "work");
             if (OnStateChanged != null) OnStateChanged();
 
             try
@@ -342,7 +344,7 @@ namespace TranscriptorApp
                     CleanupWaveIn();
                 }
 
-                // Evitar alucinaciones de Whisper ("Thank you.") cuando solo se grabÃ³ silencio total
+                // Evitar alucinaciones de Whisper cuando solo hubo silencio
                 if (activeChunkTasks.Count == 0 && maxSessionPeak < 280)
                 {
                     if (currentChunkStream != null)
@@ -350,7 +352,7 @@ namespace TranscriptorApp
                         currentChunkStream.Dispose();
                         currentChunkStream = null;
                     }
-                    if (OnStatusChanged != null) OnStatusChanged("Sin voz detectada", "No se detectÃ³ sonido en el micrÃ³fono", "idle");
+                    if (OnStatusChanged != null) OnStatusChanged("Sin voz", "No se detectÃ³ voz en el micrÃ³fono", "idle");
                     return "";
                 }
 
@@ -376,7 +378,7 @@ namespace TranscriptorApp
 
                 if (activeChunkTasks.Count == 0)
                 {
-                    if (OnStatusChanged != null) OnStatusChanged("GrabaciÃ³n muy corta", "MantÃ©n la grabaciÃ³n al menos 1 segundo", "idle");
+                    if (OnStatusChanged != null) OnStatusChanged("Muy corto", "Habla al menos 1 segundo para transcribir", "idle");
                     return "";
                 }
 
@@ -387,7 +389,6 @@ namespace TranscriptorApp
 
                 string newTranscript = string.Join(" ", texts).Trim();
 
-                // Filtrar alucinaciones tÃ­picas de silencio de Whisper
                 if (maxSessionPeak < 450 && (newTranscript.Equals("Thank you.", StringComparison.OrdinalIgnoreCase) || newTranscript.Equals("Gracias.", StringComparison.OrdinalIgnoreCase)))
                 {
                     newTranscript = "";
@@ -414,16 +415,16 @@ namespace TranscriptorApp
 
                     if (OnStatusChanged != null)
                     {
-                        OnStatusChanged("Copiado al portapapeles", "Listo para pegar (Ctrl + V) o seguir grabando", "done");
+                        OnStatusChanged("Copiado", AccumulatedText, "done");
                     }
                 }
                 else if (errors.Count > 0)
                 {
-                    if (OnStatusChanged != null) OnStatusChanged("Error de red", errors[0], "err");
+                    if (OnStatusChanged != null) OnStatusChanged("Error", errors[0], "err");
                 }
                 else
                 {
-                    if (OnStatusChanged != null) OnStatusChanged("Sin voz detectada", "Intenta hablar mÃ¡s cerca del micrÃ³fono", "idle");
+                    if (OnStatusChanged != null) OnStatusChanged("Sin voz", "Intenta hablar mÃ¡s cerca del micrÃ³fono", "idle");
                 }
 
                 return newTranscript;
@@ -728,56 +729,77 @@ namespace TranscriptorApp
     }
 
     // ==========================================
-    // COMPONENTES VISUALES WPF ESTILO APPLE PRO BLACK
+    // TEMA APPLE PRO BLACK Y ANIMACIONES SPRING
     // ==========================================
     public static class AppleTheme
     {
         public static SolidColorBrush BrushFromHex(string hex)
         {
-            return (SolidColorBrush)new BrushConverter().ConvertFromString(hex);
+            var b = (SolidColorBrush)new BrushConverter().ConvertFromString(hex);
+            if (b.CanFreeze) b.Freeze();
+            return b;
         }
 
-        public static Color ColorFromHex(string hex)
-        {
-            return (Color)ColorConverter.ConvertFromString(hex);
-        }
-
-        // Apple Pro Dark Monochrome Palette
-        public static readonly SolidColorBrush BgBlack = BrushFromHex("#050507");
-        public static readonly SolidColorBrush CardDark = BrushFromHex("#111114");
-        public static readonly SolidColorBrush CardInner = BrushFromHex("#0A0A0D");
+        public static readonly SolidColorBrush BgPure = BrushFromHex("#030304");
+        public static readonly SolidColorBrush BgBlack = BrushFromHex("#070709");
+        public static readonly SolidColorBrush CardDark = BrushFromHex("#111115");
+        public static readonly SolidColorBrush CardInner = BrushFromHex("#09090C");
         public static readonly SolidColorBrush BorderSubtle = BrushFromHex("#222228");
-        public static readonly SolidColorBrush BorderHighlight = BrushFromHex("#34343D");
+        public static readonly SolidColorBrush BorderHighlight = BrushFromHex("#363640");
+        public static readonly SolidColorBrush BorderHover = BrushFromHex("#4A4A56");
 
         public static readonly SolidColorBrush TextWhite = BrushFromHex("#F5F5F7");
         public static readonly SolidColorBrush TextMuted = BrushFromHex("#86868B");
-        public static readonly SolidColorBrush TextDim = BrushFromHex("#515158");
+        public static readonly SolidColorBrush TextDim = BrushFromHex("#525259");
 
         public static readonly SolidColorBrush BtnWhiteBg = BrushFromHex("#F5F5F7");
         public static readonly SolidColorBrush BtnWhiteHover = BrushFromHex("#FFFFFF");
-        public static readonly SolidColorBrush BtnDarkBg = BrushFromHex("#1C1C21");
-        public static readonly SolidColorBrush BtnDarkHover = BrushFromHex("#282830");
+        public static readonly SolidColorBrush BtnDarkBg = BrushFromHex("#1B1B20");
+        public static readonly SolidColorBrush BtnDarkHover = BrushFromHex("#27272F");
 
         public static readonly SolidColorBrush AppleRed = BrushFromHex("#FF3B30");
         public static readonly SolidColorBrush AppleRedHover = BrushFromHex("#FF453A");
         public static readonly SolidColorBrush AppleGreen = BrushFromHex("#30D158");
         public static readonly SolidColorBrush AppleAmber = BrushFromHex("#FF9F0A");
 
-        public static void AnimateWindowIn(Window win, ScaleTransform scale)
+        // Pinceles congelados para 60 FPS sin basura en memoria (Zero GC)
+        public static readonly SolidColorBrush WaveIdleBrush;
+        public static readonly SolidColorBrush WaveRecQuietBrush;
+        public static readonly SolidColorBrush WaveRecActiveBrush;
+        public static readonly SolidColorBrush WaveWorkBrush;
+
+        static AppleTheme()
         {
-            win.Opacity = 0;
-            scale.ScaleX = 0.93;
-            scale.ScaleY = 0.93;
+            WaveIdleBrush = new SolidColorBrush(Color.FromArgb(62, 245, 245, 247));
+            WaveIdleBrush.Freeze();
 
-            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-            var dur = new Duration(TimeSpan.FromMilliseconds(260));
+            WaveRecQuietBrush = new SolidColorBrush(Color.FromArgb(180, 255, 69, 58));
+            WaveRecQuietBrush.Freeze();
 
-            win.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, dur) { EasingFunction = ease });
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.93, 1.0, dur) { EasingFunction = ease });
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.93, 1.0, dur) { EasingFunction = ease });
+            WaveRecActiveBrush = new SolidColorBrush(Color.FromArgb(250, 255, 255, 255));
+            WaveRecActiveBrush.Freeze();
+
+            WaveWorkBrush = new SolidColorBrush(Color.FromArgb(215, 255, 159, 10));
+            WaveWorkBrush.Freeze();
         }
 
-        public static void AnimateWindowOut(Window win, ScaleTransform scale, Action onCompleted)
+        public static void AnimateSpringIn(Window win, ScaleTransform scale)
+        {
+            win.Opacity = 0;
+            scale.ScaleX = 0.86;
+            scale.ScaleY = 0.86;
+
+            var spring = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.28 };
+            var fadeEase = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var durScale = new Duration(TimeSpan.FromMilliseconds(340));
+            var durFade = new Duration(TimeSpan.FromMilliseconds(220));
+
+            win.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, durFade) { EasingFunction = fadeEase });
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.86, 1.0, durScale) { EasingFunction = spring });
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.86, 1.0, durScale) { EasingFunction = spring });
+        }
+
+        public static void AnimateSpringOut(Window win, ScaleTransform scale, Action onCompleted)
         {
             var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
             var dur = new Duration(TimeSpan.FromMilliseconds(190));
@@ -789,18 +811,19 @@ namespace TranscriptorApp
             };
 
             win.BeginAnimation(UIElement.OpacityProperty, fadeOut);
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1.0, 0.93, dur) { EasingFunction = ease });
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1.0, 0.93, dur) { EasingFunction = ease });
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1.0, 0.88, dur) { EasingFunction = ease });
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1.0, 0.88, dur) { EasingFunction = ease });
         }
     }
 
-    // BotÃ³n Apple con esquinas vectoriales perfectas y animaciones suaves
+    // BotÃ³n Apple con rebote tÃ¡ctil y esquinas vectoriales perfectas
     public class AppleButton : Border
     {
         private TextBlock labelBlock;
         private SolidColorBrush normalBg;
         private SolidColorBrush hoverBg;
         private SolidColorBrush normalFg;
+        private ScaleTransform btnScale;
         private bool isDisabled;
 
         public event RoutedEventHandler Click;
@@ -817,7 +840,7 @@ namespace TranscriptorApp
             set
             {
                 isDisabled = value;
-                this.Opacity = isDisabled ? 0.42 : 1.0;
+                this.Opacity = isDisabled ? 0.38 : 1.0;
                 this.Cursor = isDisabled ? Cursors.Arrow : Cursors.Hand;
             }
         }
@@ -832,14 +855,14 @@ namespace TranscriptorApp
 
             this.CornerRadius = new CornerRadius(radius);
             this.Background = normalBg;
-            this.BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
+            this.BorderBrush = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255));
             this.BorderThickness = new Thickness(1);
             this.Cursor = Cursors.Hand;
             this.SnapsToDevicePixels = true;
 
-            var scale = new ScaleTransform(1, 1);
+            btnScale = new ScaleTransform(1, 1);
             this.RenderTransformOrigin = new Point(0.5, 0.5);
-            this.RenderTransform = scale;
+            this.RenderTransform = btnScale;
 
             labelBlock = new TextBlock
             {
@@ -857,27 +880,28 @@ namespace TranscriptorApp
             {
                 if (isDisabled) return;
                 this.Background = hoverBg;
+                AnimateScale(1.03, 120);
             };
 
             this.MouseLeave += (s, e) =>
             {
                 if (isDisabled) return;
                 this.Background = normalBg;
-                AnimateScale(scale, 1.0);
+                AnimateScale(1.0, 140);
             };
 
             this.MouseLeftButtonDown += (s, e) =>
             {
                 if (isDisabled) return;
                 e.Handled = true;
-                AnimateScale(scale, 0.96);
+                AnimateScale(0.92, 85);
             };
 
             this.MouseLeftButtonUp += (s, e) =>
             {
                 if (isDisabled) return;
                 e.Handled = true;
-                AnimateScale(scale, 1.0);
+                AnimateBounceRelease();
                 if (Click != null) Click(this, new RoutedEventArgs());
             };
         }
@@ -891,15 +915,28 @@ namespace TranscriptorApp
             labelBlock.Foreground = normalFg;
         }
 
-        private static void AnimateScale(ScaleTransform st, double to)
+        private void AnimateScale(double to, int ms)
         {
-            var anim = new DoubleAnimation(to, new Duration(TimeSpan.FromMilliseconds(110)));
-            st.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
-            st.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+            var anim = new DoubleAnimation(to, new Duration(TimeSpan.FromMilliseconds(ms)))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            btnScale.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
+            btnScale.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+        }
+
+        private void AnimateBounceRelease()
+        {
+            var anim = new DoubleAnimation(1.0, new Duration(TimeSpan.FromMilliseconds(220)))
+            {
+                EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.45 }
+            };
+            btnScale.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
+            btnScale.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
         }
     }
 
-    // Visualizador de Onda estilo Apple Voice Memos / Dynamic Island (60 FPS)
+    // Visualizador de Onda estilo Apple Voice Memos / Dynamic Island a 60 FPS reales
     public class AppleWaveformVisualizer : Canvas
     {
         private readonly Rectangle[] bars;
@@ -908,6 +945,7 @@ namespace TranscriptorApp
         private readonly Random rng = new Random();
         private double currentAudioLevel = 0;
         private bool isRecordingActive = false;
+        private bool isProcessingActive = false;
         private double phase = 0;
         private readonly int barCount;
 
@@ -927,7 +965,7 @@ namespace TranscriptorApp
                 {
                     RadiusX = 2,
                     RadiusY = 2,
-                    Fill = new SolidColorBrush(Color.FromArgb(90, 245, 245, 247))
+                    Fill = AppleTheme.WaveIdleBrush
                 };
                 bars[i] = rect;
                 this.Children.Add(rect);
@@ -936,46 +974,59 @@ namespace TranscriptorApp
             this.SizeChanged += (s, e) => LayoutBars();
         }
 
-        public void SetState(double level, bool recording)
+        public void SetState(double level, bool recording, bool processing)
         {
             currentAudioLevel = level;
             isRecordingActive = recording;
+            isProcessingActive = processing;
+            if (!recording)
+            {
+                currentAudioLevel = 0;
+            }
         }
 
         public void StepFrame()
         {
-            phase += 0.14;
-            double hAvail = Math.Max(14, this.ActualHeight - 10);
+            phase += 0.16;
+            double hAvail = Math.Max(12, this.ActualHeight - 8);
 
             for (int i = 0; i < barCount; i++)
             {
                 double centerDist = Math.Abs(i - (barCount - 1) / 2.0) / (barCount / 2.0);
-                double envelope = Math.Max(0.15, 1.0 - (centerDist * 0.78));
+                double envelope = Math.Max(0.18, 1.0 - (centerDist * 0.76));
 
-                if (!isRecordingActive)
+                if (isProcessingActive)
                 {
-                    targetHeights[i] = 3.5 + Math.Sin(phase * 0.6 + i * 0.35) * 1.2;
-                    bars[i].Fill = new SolidColorBrush(Color.FromArgb(65, 245, 245, 247));
+                    // Onda viajera suave mientras Whisper transcribe
+                    double shimmer = 0.5 + 0.5 * Math.Sin(phase * 1.8 - i * 0.45);
+                    targetHeights[i] = 4.0 + (hAvail * 0.55 * shimmer * envelope);
+                    bars[i].Fill = AppleTheme.WaveWorkBrush;
                 }
-                else if (currentAudioLevel < 0.03)
+                else if (!isRecordingActive)
                 {
-                    // RespiraciÃ³n sutil cuando estÃ¡s en silencio mientras grabas
-                    targetHeights[i] = 5.0 + Math.Sin(phase + i * 0.45) * 2.5 * envelope;
-                    bars[i].Fill = new SolidColorBrush(Color.FromArgb(165, 255, 69, 58));
+                    targetHeights[i] = 3.5 + Math.Sin(phase * 0.5 + i * 0.35) * 1.1;
+                    bars[i].Fill = AppleTheme.WaveIdleBrush;
+                }
+                else if (currentAudioLevel < 0.025)
+                {
+                    targetHeights[i] = 4.8 + Math.Sin(phase * 1.1 + i * 0.45) * 2.4 * envelope;
+                    bars[i].Fill = AppleTheme.WaveRecQuietBrush;
                 }
                 else
                 {
-                    double wave = 0.65 + 0.35 * Math.Sin(phase * 1.9 + i * 0.55);
-                    double jitter = 0.75 + rng.NextDouble() * 0.5;
-                    double normalized = Math.Min(1.0, currentAudioLevel * envelope * wave * jitter * 1.45);
+                    double wave = 0.62 + 0.38 * Math.Sin(phase * 2.1 + i * 0.58);
+                    double jitter = 0.76 + rng.NextDouble() * 0.48;
+                    double normalized = Math.Min(1.0, currentAudioLevel * envelope * wave * jitter * 1.55);
                     targetHeights[i] = Math.Max(5.0, normalized * hAvail);
-                    bars[i].Fill = new SolidColorBrush(Color.FromArgb(245, 255, 255, 255));
+                    bars[i].Fill = AppleTheme.WaveRecActiveBrush;
                 }
 
-                currentHeights[i] = currentHeights[i] + (targetHeights[i] - currentHeights[i]) * 0.32;
+                currentHeights[i] += (targetHeights[i] - currentHeights[i]) * 0.34;
             }
 
             LayoutBars();
+            // Decaimiento suave del nivel entre muestras de audio
+            currentAudioLevel *= 0.88;
         }
 
         private void LayoutBars()
@@ -984,14 +1035,14 @@ namespace TranscriptorApp
             double h = this.ActualHeight;
             if (w <= 10 || h <= 6) return;
 
-            double totalBarSpace = w - 16;
+            double totalBarSpace = w - 10;
             double step = totalBarSpace / barCount;
-            double barW = Math.Max(2.5, Math.Min(4.5, step * 0.48));
+            double barW = Math.Max(2.4, Math.Min(4.2, step * 0.50));
 
             for (int i = 0; i < barCount; i++)
             {
                 double bh = Math.Max(3.5, Math.Min(h - 4, currentHeights[i]));
-                double x = 8 + i * step + (step - barW) / 2.0;
+                double x = 5 + i * step + (step - barW) / 2.0;
                 double y = (h - bh) / 2.0;
 
                 bars[i].Width = barW;
@@ -1005,28 +1056,29 @@ namespace TranscriptorApp
     }
 
     // ==========================================
-    // VENTANA PRINCIPAL: TRANSCRIPTOR (ESTILO APPLE PRO BLACK)
+    // VENTANA PRINCIPAL DE INICIO: MODO PÃLDORA (DYNAMIC ISLAND)
     // ==========================================
-    public class MainWindow : Window
+    public class PillWindow : Window
     {
         private AudioRecorderEngine engine;
-        private PillWindow pillWindow;
-        private ScaleTransform windowScale;
-
-        private Ellipse statusDot;
-        private TextBlock lblStatusTitle;
-        private TextBlock lblStatusSub;
-        private TextBlock lblTimer;
-        private TextBlock lblWordCount;
-        private AppleWaveformVisualizer waveform;
-        private AppleButton btnRecord;
-        private AppleButton btnContinue;
+        private MainWindow fullWindow;
+        private Border pillBorder;
+        private Border previewToastBorder;
+        private TextBlock lblPreviewToast;
+        private ScaleTransform pillScale;
+        private ScaleTransform haloScale;
+        private Ellipse recHalo;
+        private Ellipse recDot;
+        private TextBlock lblPillTimer;
+        private TextBlock lblPillState;
+        private AppleWaveformVisualizer miniWave;
+        private AppleButton btnRecToggle;
+        private AppleButton btnContToggle;
         private AppleButton btnCopy;
-        private AppleButton btnPillMode;
-        private AppleButton btnStartup;
-        private AppleButton btnClear;
-        private TextBox txtOutput;
-        private DispatcherTimer mainTimer;
+        private AppleButton btnExpand;
+        private AppleButton btnClosePill;
+        private DispatcherTimer masterTimer;
+        private DispatcherTimer toastHideTimer;
 
         private const int HOTKEY_ID = 9001;
         private const uint MOD_ALT = 0x0001;
@@ -1038,7 +1090,7 @@ namespace TranscriptorApp
         [DllImport("user32.dll")]
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-        public MainWindow()
+        public PillWindow()
         {
             string exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
             if (!StartupManager.IsStartupEnabled())
@@ -1047,33 +1099,51 @@ namespace TranscriptorApp
             }
 
             engine = new AudioRecorderEngine();
-            engine.OnAudioLevel += (lvl) => waveform.SetState(lvl, engine.IsRecording && !engine.IsPaused);
-            engine.OnStatusChanged += UpdateStatusUI;
-            engine.OnTextUpdated += UpdateTextUI;
-            engine.OnStateChanged += SyncButtonsState;
+            BuildDynamicIslandUI();
 
-            BuildAppleBlackUI();
+            fullWindow = new MainWindow(engine, this);
 
-            pillWindow = new PillWindow(engine, this);
+            engine.OnAudioLevel += (lvl) =>
+            {
+                miniWave.SetState(lvl, engine.IsRecording && !engine.IsPaused, engine.IsProcessing);
+                fullWindow.PushAudioLevel(lvl);
+            };
+            engine.OnStateChanged += OnEngineStateChanged;
+            engine.OnStatusChanged += OnEngineStatusChanged;
 
-            mainTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
-            mainTimer.Tick += (s, e) =>
+            // Loop central a ~60 FPS (16ms) que procesa el micrÃ³fono y anima la pÃ­ldora o ventana grande
+            masterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            masterTimer.Tick += (s, e) =>
             {
                 engine.PollAudioBuffers();
                 TimeSpan t = engine.TotalElapsedTime;
-                lblTimer.Text = string.Format("{0:D2}:{1:D2}", (int)t.TotalMinutes, t.Seconds);
+                string timeStr = string.Format("{0:D2}:{1:D2}", (int)t.TotalMinutes, t.Seconds);
+                lblPillTimer.Text = timeStr;
+                fullWindow.UpdateTimerText(timeStr);
+
                 if (this.IsVisible)
                 {
-                    waveform.StepFrame();
+                    miniWave.StepFrame();
+                }
+                if (fullWindow.IsVisible)
+                {
+                    fullWindow.StepWaveform();
                 }
             };
-            mainTimer.Start();
+            masterTimer.Start();
 
             this.Loaded += (s, e) =>
             {
-                AppleTheme.AnimateWindowIn(this, windowScale);
+                PositionAtTopCenter();
+                AppleTheme.AnimateSpringIn(this, pillScale);
                 RegisterGlobalHotkey();
             };
+        }
+
+        private void PositionAtTopCenter()
+        {
+            this.Left = (SystemParameters.WorkArea.Width - this.Width) / 2.0;
+            this.Top = SystemParameters.WorkArea.Top + 12;
         }
 
         private void RegisterGlobalHotkey()
@@ -1113,9 +1183,519 @@ namespace TranscriptorApp
             }
         }
 
-        private void BuildAppleBlackUI()
+        private void BuildDynamicIslandUI()
         {
             this.Title = "Transcriptor";
+            this.Width = 480;
+            this.Height = 118; // Espacio para la pÃ­ldora superior + burbuja de vista previa inferior
+            this.WindowStyle = WindowStyle.None;
+            this.AllowsTransparency = true;
+            this.Background = Brushes.Transparent;
+            this.Topmost = true;
+            this.ShowInTaskbar = true;
+            this.ResizeMode = ResizeMode.NoResize;
+            this.FontFamily = new FontFamily("Segoe UI, -apple-system, BlinkMacSystemFont");
+
+            var rootStack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+
+            pillScale = new ScaleTransform(1, 1);
+
+            pillBorder = new Border
+            {
+                Width = 416,
+                Height = 54,
+                Margin = new Thickness(12, 8, 12, 6),
+                CornerRadius = new CornerRadius(27),
+                Background = AppleTheme.BgPure,
+                BorderBrush = AppleTheme.BorderHighlight,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(14, 0, 10, 0),
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = pillScale,
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    BlurRadius = 22,
+                    ShadowDepth = 6,
+                    Opacity = 0.88
+                }
+            };
+
+            pillBorder.MouseEnter += (s, e) =>
+            {
+                pillBorder.BorderBrush = AppleTheme.BorderHover;
+            };
+            pillBorder.MouseLeave += (s, e) =>
+            {
+                pillBorder.BorderBrush = AppleTheme.BorderHighlight;
+            };
+            pillBorder.MouseLeftButtonDown += (s, e) =>
+            {
+                if (e.ButtonState == MouseButtonState.Pressed) this.DragMove();
+            };
+
+            var row = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Orbe con Halo + Reloj + Estado
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Onda Dynamic Island
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Botones circulares
+
+            var leftInfo = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.SizeAll
+            };
+
+            // Contenedor de punto + halo animado
+            var dotGrid = new Grid
+            {
+                Width = 18,
+                Height = 18,
+                Margin = new Thickness(0, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            haloScale = new ScaleTransform(1, 1);
+            recHalo = new Ellipse
+            {
+                Width = 9,
+                Height = 9,
+                Fill = AppleTheme.AppleRed,
+                Opacity = 0,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = haloScale,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            recDot = new Ellipse
+            {
+                Width = 8,
+                Height = 8,
+                Fill = AppleTheme.AppleGreen,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            dotGrid.Children.Add(recHalo);
+            dotGrid.Children.Add(recDot);
+
+            var timerAndStateStack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            lblPillTimer = new TextBlock
+            {
+                Text = "00:00",
+                Foreground = AppleTheme.TextWhite,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 13.5,
+                FontWeight = FontWeights.Bold,
+                LineHeight = 14
+            };
+
+            lblPillState = new TextBlock
+            {
+                Text = "Listo",
+                Foreground = AppleTheme.TextMuted,
+                FontSize = 9.5,
+                FontWeight = FontWeights.Medium
+            };
+
+            timerAndStateStack.Children.Add(lblPillTimer);
+            timerAndStateStack.Children.Add(lblPillState);
+
+            leftInfo.Children.Add(dotGrid);
+            leftInfo.Children.Add(timerAndStateStack);
+
+            miniWave = new AppleWaveformVisualizer(18)
+            {
+                Height = 30,
+                Margin = new Thickness(10, 0, 10, 0),
+                Cursor = Cursors.SizeAll
+            };
+
+            var btnStack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+            btnRecToggle = new AppleButton("â—", 17, AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.AppleRed, 13, FontWeights.Bold)
+            {
+                Width = 34,
+                Height = 34,
+                Margin = new Thickness(0, 0, 6, 0),
+                ToolTip = "Empezar / Finalizar grabaciÃ³n (Alt + M)"
+            };
+            btnRecToggle.Click += async (s, e) =>
+            {
+                if (engine.IsProcessing) return;
+                if (!engine.IsRecording) engine.StartRecording(append: false);
+                else await engine.StopRecordingAndTranscribeAsync();
+            };
+
+            btnContToggle = new AppleButton("+", 17, AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite, 15, FontWeights.SemiBold)
+            {
+                Width = 34,
+                Height = 34,
+                Margin = new Thickness(0, 0, 6, 0),
+                ToolTip = "Seguir grabando (sin borrar lo anterior) / Pausar"
+            };
+            btnContToggle.Click += (s, e) =>
+            {
+                if (engine.IsProcessing) return;
+                if (!engine.IsRecording) engine.StartRecording(append: true);
+                else if (!engine.IsPaused) engine.PauseRecording();
+                else engine.ResumeRecording();
+            };
+
+            btnCopy = new AppleButton("Copiar", 16, AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite, 11, FontWeights.SemiBold)
+            {
+                Width = 54,
+                Height = 34,
+                Margin = new Thickness(0, 0, 6, 0),
+                ToolTip = "Copiar todo el texto al portapapeles"
+            };
+            btnCopy.Click += (s, e) =>
+            {
+                string t = (engine.AccumulatedText ?? "").Trim();
+                if (!string.IsNullOrEmpty(t))
+                {
+                    try
+                    {
+                        Clipboard.SetText(t);
+                        FlashPillCopied();
+                        ShowPreviewToast("âœ“ Copiado: " + TruncatePreview(t));
+                    }
+                    catch { }
+                }
+                else
+                {
+                    ShowPreviewToast("AÃºn no hay texto transcrito");
+                }
+            };
+
+            btnExpand = new AppleButton("â†—", 17, AppleTheme.CardDark, AppleTheme.BtnDarkHover, AppleTheme.TextWhite, 12, FontWeights.Bold)
+            {
+                Width = 34,
+                Height = 34,
+                Margin = new Thickness(0, 0, 5, 0),
+                ToolTip = "Abrir Modo Grande (Editor completo)"
+            };
+            btnExpand.Click += (s, e) => ExpandToFullWindow();
+
+            btnClosePill = new AppleButton("âœ•", 17, AppleTheme.CardDark, AppleTheme.AppleRed, AppleTheme.TextMuted, 10.5, FontWeights.Bold)
+            {
+                Width = 34,
+                Height = 34,
+                ToolTip = "Cerrar Transcriptor"
+            };
+            btnClosePill.Click += (s, e) =>
+            {
+                AppleTheme.AnimateSpringOut(this, pillScale, () =>
+                {
+                    engine.CleanupWaveIn();
+                    Application.Current.Shutdown();
+                });
+            };
+
+            btnStack.Children.Add(btnRecToggle);
+            btnStack.Children.Add(btnContToggle);
+            btnStack.Children.Add(btnCopy);
+            btnStack.Children.Add(btnExpand);
+            btnStack.Children.Add(btnClosePill);
+
+            Grid.SetColumn(leftInfo, 0);
+            Grid.SetColumn(miniWave, 1);
+            Grid.SetColumn(btnStack, 2);
+
+            row.Children.Add(leftInfo);
+            row.Children.Add(miniWave);
+            row.Children.Add(btnStack);
+
+            pillBorder.Child = row;
+
+            // Burbuja inferior desplegable para previsualizar lo reciÃ©n transcrito sin salir de la pÃ­ldora
+            previewToastBorder = new Border
+            {
+                MaxWidth = 410,
+                CornerRadius = new CornerRadius(14),
+                Background = AppleTheme.CardDark,
+                BorderBrush = AppleTheme.BorderSubtle,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(14, 7, 14, 7),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Opacity = 0,
+                IsHitTestVisible = false
+            };
+
+            lblPreviewToast = new TextBlock
+            {
+                Text = "",
+                Foreground = AppleTheme.TextWhite,
+                FontSize = 11.5,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 380
+            };
+            previewToastBorder.Child = lblPreviewToast;
+
+            rootStack.Children.Add(pillBorder);
+            rootStack.Children.Add(previewToastBorder);
+
+            this.Content = rootStack;
+        }
+
+        private static string TruncatePreview(string text)
+        {
+            string clean = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return clean.Length > 52 ? clean.Substring(0, 52) + "â€¦" : clean;
+        }
+
+        private void ShowPreviewToast(string message)
+        {
+            lblPreviewToast.Text = message;
+            var fadeIn = new DoubleAnimation(1.0, new Duration(TimeSpan.FromMilliseconds(200)));
+            previewToastBorder.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+
+            if (toastHideTimer != null) toastHideTimer.Stop();
+            toastHideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(3200) };
+            toastHideTimer.Tick += (s, e) =>
+            {
+                toastHideTimer.Stop();
+                var fadeOut = new DoubleAnimation(0.0, new Duration(TimeSpan.FromMilliseconds(280)));
+                previewToastBorder.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+            };
+            toastHideTimer.Start();
+        }
+
+        private void AnimatePillWidth(double targetWidth)
+        {
+            var anim = new DoubleAnimation(targetWidth, new Duration(TimeSpan.FromMilliseconds(340)))
+            {
+                EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.24 }
+            };
+            pillBorder.BeginAnimation(FrameworkElement.WidthProperty, anim);
+        }
+
+        private void SetHaloAnimation(bool active)
+        {
+            if (active)
+            {
+                var dur = new Duration(TimeSpan.FromMilliseconds(1250));
+                var scaleAnim = new DoubleAnimation(1.0, 2.5, dur) { RepeatBehavior = RepeatBehavior.Forever };
+                var fadeAnim = new DoubleAnimation(0.65, 0.0, dur) { RepeatBehavior = RepeatBehavior.Forever };
+                haloScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+                haloScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
+                recHalo.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
+            else
+            {
+                haloScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+                haloScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+                recHalo.BeginAnimation(UIElement.OpacityProperty, null);
+                recHalo.Opacity = 0;
+            }
+        }
+
+        private void FlashPillCopied()
+        {
+            btnCopy.Text = "âœ“";
+            btnCopy.SetPalette(AppleTheme.AppleGreen, AppleTheme.AppleGreen, AppleTheme.BgPure);
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1800) };
+            t.Tick += (s, e) =>
+            {
+                t.Stop();
+                btnCopy.Text = "Copiar";
+                btnCopy.SetPalette(AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite);
+            };
+            t.Start();
+        }
+
+        private void OnEngineStatusChanged(string title, string sub, string tag)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => OnEngineStatusChanged(title, sub, tag)));
+                return;
+            }
+
+            lblPillState.Text = title;
+
+            if (tag == "rec")
+            {
+                recDot.Fill = AppleTheme.AppleRed;
+                lblPillState.Foreground = AppleTheme.AppleRed;
+                SetHaloAnimation(true);
+            }
+            else if (tag == "pause" || tag == "work")
+            {
+                recDot.Fill = AppleTheme.AppleAmber;
+                lblPillState.Foreground = AppleTheme.AppleAmber;
+                SetHaloAnimation(false);
+            }
+            else if (tag == "err")
+            {
+                recDot.Fill = AppleTheme.AppleRed;
+                lblPillState.Foreground = AppleTheme.AppleRed;
+                SetHaloAnimation(false);
+                ShowPreviewToast(sub);
+            }
+            else
+            {
+                recDot.Fill = AppleTheme.AppleGreen;
+                lblPillState.Foreground = AppleTheme.TextMuted;
+                SetHaloAnimation(false);
+            }
+
+            if (tag == "done")
+            {
+                FlashPillCopied();
+                ShowPreviewToast("âœ“ Copiado: " + TruncatePreview(sub));
+            }
+        }
+
+        private void OnEngineStateChanged()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(OnEngineStateChanged));
+                return;
+            }
+
+            miniWave.SetState(0, engine.IsRecording && !engine.IsPaused, engine.IsProcessing);
+
+            if (engine.IsProcessing)
+            {
+                AnimatePillWidth(448);
+                btnRecToggle.IsDisabled = true;
+                btnContToggle.IsDisabled = true;
+                btnRecToggle.Text = "â€¦";
+            }
+            else if (engine.IsRecording)
+            {
+                AnimatePillWidth(452);
+                btnRecToggle.IsDisabled = false;
+                btnContToggle.IsDisabled = false;
+                btnRecToggle.Text = "â– ";
+                btnRecToggle.SetPalette(AppleTheme.AppleRed, AppleTheme.AppleRedHover, AppleTheme.TextWhite);
+
+                if (engine.IsPaused)
+                {
+                    btnContToggle.Text = "â–¶";
+                    btnContToggle.SetPalette(AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.BgPure);
+                }
+                else
+                {
+                    btnContToggle.Text = "âšâš";
+                    btnContToggle.SetPalette(AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite);
+                }
+            }
+            else
+            {
+                AnimatePillWidth(416);
+                btnRecToggle.IsDisabled = false;
+                btnContToggle.IsDisabled = false;
+                btnRecToggle.Text = "â—";
+                btnRecToggle.SetPalette(AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.AppleRed);
+
+                btnContToggle.Text = "+";
+                btnContToggle.SetPalette(AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite);
+            }
+        }
+
+        public void ExpandToFullWindow()
+        {
+            AppleTheme.AnimateSpringOut(this, pillScale, () =>
+            {
+                this.Hide();
+                fullWindow.ShowWithSpring();
+            });
+        }
+
+        public void ReturnToPillFromFullWindow()
+        {
+            this.Show();
+            this.Topmost = true;
+            AppleTheme.AnimateSpringIn(this, pillScale);
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            try
+            {
+                IntPtr handle = new WindowInteropHelper(this).Handle;
+                UnregisterHotKey(handle, HOTKEY_ID);
+            }
+            catch { }
+            engine.CleanupWaveIn();
+            base.OnClosed(e);
+        }
+    }
+
+    // ==========================================
+    // MODO GRANDE (EDITOR COMPLETO SECUNDARIO)
+    // ==========================================
+    public class MainWindow : Window
+    {
+        private AudioRecorderEngine engine;
+        private PillWindow parentPill;
+        private ScaleTransform windowScale;
+
+        private Ellipse statusDot;
+        private TextBlock lblStatusTitle;
+        private TextBlock lblStatusSub;
+        private TextBlock lblTimer;
+        private TextBlock lblWordCount;
+        private AppleWaveformVisualizer waveform;
+        private AppleButton btnRecord;
+        private AppleButton btnContinue;
+        private AppleButton btnCopy;
+        private AppleButton btnPillMode;
+        private AppleButton btnStartup;
+        private AppleButton btnClear;
+        private TextBox txtOutput;
+
+        public MainWindow(AudioRecorderEngine eng, PillWindow pill)
+        {
+            this.engine = eng;
+            this.parentPill = pill;
+
+            BuildAppleBlackUI();
+
+            engine.OnStatusChanged += UpdateStatusUI;
+            engine.OnTextUpdated += UpdateTextUI;
+            engine.OnStateChanged += SyncButtonsState;
+        }
+
+        public void PushAudioLevel(double lvl)
+        {
+            waveform.SetState(lvl, engine.IsRecording && !engine.IsPaused, engine.IsProcessing);
+        }
+
+        public void UpdateTimerText(string formatted)
+        {
+            lblTimer.Text = formatted;
+        }
+
+        public void StepWaveform()
+        {
+            waveform.StepFrame();
+        }
+
+        public void ShowWithSpring()
+        {
+            this.Show();
+            this.Activate();
+            AppleTheme.AnimateSpringIn(this, windowScale);
+        }
+
+        private void BuildAppleBlackUI()
+        {
+            this.Title = "Transcriptor â€” Modo Grande";
             this.Width = 520;
             this.Height = 640;
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -1127,7 +1707,6 @@ namespace TranscriptorApp
 
             windowScale = new ScaleTransform(1, 1);
 
-            // Marco exterior con sombra suave y esquinas vectoriales de 24px (Cero bordes cortados)
             var outerShell = new Border
             {
                 Margin = new Thickness(16),
@@ -1142,20 +1721,18 @@ namespace TranscriptorApp
                     Color = Colors.Black,
                     BlurRadius = 28,
                     ShadowDepth = 8,
-                    Opacity = 0.78
+                    Opacity = 0.82
                 }
             };
 
             var rootGrid = new Grid { Margin = new Thickness(22, 16, 22, 22) };
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(44) });  // Fila 0: Barra superior Apple
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(154) }); // Fila 1: Tarjeta Estado + Onda de voz
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(64) });  // Fila 2: Botones Grabar / Seguir Grabando
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Fila 3: TranscripciÃ³n
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(56) });  // Fila 4: Copiar al portapapeles
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(44) });
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(154) });
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(64) });
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(56) });
 
-            // ==========================================
-            // FILA 0: CABECERA SUPERIOR (TÃTULO + MODO PÃLDORA + CERRAR)
-            // ==========================================
+            // Cabecera Superior
             var headerGrid = new Grid { Background = Brushes.Transparent };
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1200,7 +1777,7 @@ namespace TranscriptorApp
                 Width = 92,
                 Height = 28,
                 Margin = new Thickness(0, 0, 8, 0),
-                ToolTip = "Activar o desactivar que Transcriptor inicie automÃ¡ticamente al encender el PC"
+                ToolTip = "Iniciar automÃ¡ticamente en Modo PÃ­ldora al encender el PC"
             };
             btnStartup.Click += (s, e) =>
             {
@@ -1212,30 +1789,21 @@ namespace TranscriptorApp
             };
 
             btnPillMode = new AppleButton(
-                "Modo PÃ­ldora",
+                "â†™ Modo PÃ­ldora",
                 13,
-                AppleTheme.BtnDarkBg,
-                AppleTheme.BtnDarkHover,
-                AppleTheme.TextWhite,
+                AppleTheme.BtnWhiteBg,
+                AppleTheme.BtnWhiteHover,
+                AppleTheme.BgPure,
                 11.5,
-                FontWeights.Medium
+                FontWeights.SemiBold
             )
             {
-                Width = 104,
+                Width = 112,
                 Height = 28,
-                Margin = new Thickness(0, 0, 10, 0),
-                ToolTip = "Cambiar a la barra flotante compacta (Dynamic Island)"
+                Margin = new Thickness(0, 0, 8, 0),
+                ToolTip = "Volver a la barra flotante compacta"
             };
-            btnPillMode.Click += (s, e) => SwitchToPillMode();
-
-            var btnMin = new AppleButton("â€”", 14, AppleTheme.CardDark, AppleTheme.BtnDarkHover, AppleTheme.TextMuted, 11, FontWeights.Bold)
-            {
-                Width = 28,
-                Height = 28,
-                Margin = new Thickness(0, 0, 6, 0),
-                ToolTip = "Minimizar"
-            };
-            btnMin.Click += (s, e) => this.WindowState = WindowState.Minimized;
+            btnPillMode.Click += (s, e) => CollapseToPill();
 
             var btnClose = new AppleButton("âœ•", 14, AppleTheme.CardDark, AppleTheme.AppleRed, AppleTheme.TextMuted, 11, FontWeights.Bold)
             {
@@ -1243,11 +1811,17 @@ namespace TranscriptorApp
                 Height = 28,
                 ToolTip = "Cerrar Transcriptor"
             };
-            btnClose.Click += (s, e) => CloseAppWithAnimation();
+            btnClose.Click += (s, e) =>
+            {
+                AppleTheme.AnimateSpringOut(this, windowScale, () =>
+                {
+                    engine.CleanupWaveIn();
+                    Application.Current.Shutdown();
+                });
+            };
 
             controlsStack.Children.Add(btnStartup);
             controlsStack.Children.Add(btnPillMode);
-            controlsStack.Children.Add(btnMin);
             controlsStack.Children.Add(btnClose);
 
             Grid.SetColumn(titleStack, 0);
@@ -1255,9 +1829,7 @@ namespace TranscriptorApp
             headerGrid.Children.Add(titleStack);
             headerGrid.Children.Add(controlsStack);
 
-            // ==========================================
-            // FILA 1: TARJETA DE ESTADO Y ONDA APPLE VOICE MEMOS
-            // ==========================================
+            // Tarjeta Hero
             var heroCard = new Border
             {
                 CornerRadius = new CornerRadius(18),
@@ -1304,7 +1876,8 @@ namespace TranscriptorApp
                 Text = "Trozos automÃ¡ticos de 2 min â€¢ Alt + M",
                 Foreground = AppleTheme.TextMuted,
                 FontSize = 11.5,
-                Margin = new Thickness(0, 3, 0, 0)
+                Margin = new Thickness(0, 3, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
 
             statusTextStack.Children.Add(statusHeaderRow);
@@ -1335,7 +1908,7 @@ namespace TranscriptorApp
                 Padding = new Thickness(4, 2, 4, 2)
             };
 
-            waveform = new AppleWaveformVisualizer(40);
+            waveform = new AppleWaveformVisualizer(42);
             waveBorder.Child = waveform;
 
             Grid.SetRow(statusTopGrid, 0);
@@ -1344,9 +1917,7 @@ namespace TranscriptorApp
             heroGrid.Children.Add(waveBorder);
             heroCard.Child = heroGrid;
 
-            // ==========================================
-            // FILA 2: BOTONES DE ACCIÃ“N (EMPEZAR + SEGUIR GRABANDO)
-            // ==========================================
+            // Botones AcciÃ³n
             var actionGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
             actionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.05, GridUnitType.Star) });
             actionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
@@ -1357,21 +1928,15 @@ namespace TranscriptorApp
                 15,
                 AppleTheme.BtnWhiteBg,
                 AppleTheme.BtnWhiteHover,
-                AppleTheme.BgBlack,
+                AppleTheme.BgPure,
                 13.5,
                 FontWeights.SemiBold
             );
             btnRecord.Click += async (s, e) =>
             {
                 if (engine.IsProcessing) return;
-                if (!engine.IsRecording)
-                {
-                    engine.StartRecording(append: false);
-                }
-                else
-                {
-                    await engine.StopRecordingAndTranscribeAsync();
-                }
+                if (!engine.IsRecording) engine.StartRecording(append: false);
+                else await engine.StopRecordingAndTranscribeAsync();
             };
 
             btnContinue = new AppleButton(
@@ -1386,18 +1951,9 @@ namespace TranscriptorApp
             btnContinue.Click += (s, e) =>
             {
                 if (engine.IsProcessing) return;
-                if (!engine.IsRecording)
-                {
-                    engine.StartRecording(append: true);
-                }
-                else if (!engine.IsPaused)
-                {
-                    engine.PauseRecording();
-                }
-                else
-                {
-                    engine.ResumeRecording();
-                }
+                if (!engine.IsRecording) engine.StartRecording(append: true);
+                else if (!engine.IsPaused) engine.PauseRecording();
+                else engine.ResumeRecording();
             };
 
             Grid.SetColumn(btnRecord, 0);
@@ -1405,9 +1961,7 @@ namespace TranscriptorApp
             actionGrid.Children.Add(btnRecord);
             actionGrid.Children.Add(btnContinue);
 
-            // ==========================================
-            // FILA 3: TARJETA DE TRANSCRIPCIÃ“N SOBRIA
-            // ==========================================
+            // Tarjeta TranscripciÃ³n
             var transcriptCard = new Border
             {
                 CornerRadius = new CornerRadius(18),
@@ -1494,9 +2048,7 @@ namespace TranscriptorApp
             transcriptGrid.Children.Add(txtContainer);
             transcriptCard.Child = transcriptGrid;
 
-            // ==========================================
-            // FILA 4: BOTÃ“N COPIAR AL PORTAPAPELES
-            // ==========================================
+            // BotÃ³n Copiar
             btnCopy = new AppleButton(
                 "Copiar al Portapapeles",
                 15,
@@ -1524,6 +2076,15 @@ namespace TranscriptorApp
             this.Content = outerShell;
         }
 
+        private void CollapseToPill()
+        {
+            AppleTheme.AnimateSpringOut(this, windowScale, () =>
+            {
+                this.Hide();
+                parentPill.ReturnToPillFromFullWindow();
+            });
+        }
+
         private void CopyAllText()
         {
             string t = txtOutput.Text.Trim();
@@ -1545,7 +2106,7 @@ namespace TranscriptorApp
         private void FlashCopyButton()
         {
             btnCopy.Text = "âœ“  Copiado al Portapapeles";
-            btnCopy.SetPalette(AppleTheme.AppleGreen, AppleTheme.AppleGreen, AppleTheme.BgBlack);
+            btnCopy.SetPalette(AppleTheme.AppleGreen, AppleTheme.AppleGreen, AppleTheme.BgPure);
 
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1800) };
             timer.Tick += (s, e) =>
@@ -1573,7 +2134,7 @@ namespace TranscriptorApp
             }
 
             lblStatusTitle.Text = title;
-            lblStatusSub.Text = sub;
+            lblStatusSub.Text = tag == "done" ? "Listo para pegar con Ctrl + V o seguir grabando" : sub;
 
             if (tag == "rec") statusDot.Fill = AppleTheme.AppleRed;
             else if (tag == "pause" || tag == "work") statusDot.Fill = AppleTheme.AppleAmber;
@@ -1607,6 +2168,8 @@ namespace TranscriptorApp
                 return;
             }
 
+            waveform.SetState(0, engine.IsRecording && !engine.IsPaused, engine.IsProcessing);
+
             if (engine.IsProcessing)
             {
                 btnRecord.IsDisabled = true;
@@ -1625,7 +2188,7 @@ namespace TranscriptorApp
                 if (engine.IsPaused)
                 {
                     btnContinue.Text = "Seguir Grabando";
-                    btnContinue.SetPalette(AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.BgBlack);
+                    btnContinue.SetPalette(AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.BgPure);
                 }
                 else
                 {
@@ -1639,368 +2202,11 @@ namespace TranscriptorApp
                 btnContinue.IsDisabled = false;
 
                 btnRecord.Text = "Empezar GrabaciÃ³n";
-                btnRecord.SetPalette(AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.BgBlack);
+                btnRecord.SetPalette(AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.BgPure);
 
                 btnContinue.Text = "Seguir Grabando";
                 btnContinue.SetPalette(AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite);
             }
-        }
-
-        public void SwitchToPillMode()
-        {
-            AppleTheme.AnimateWindowOut(this, windowScale, () =>
-            {
-                this.Hide();
-                pillWindow.ShowWithAnimation();
-            });
-        }
-
-        public void RestoreFromPillMode()
-        {
-            pillWindow.HideWithAnimation(() =>
-            {
-                this.Show();
-                this.Activate();
-                AppleTheme.AnimateWindowIn(this, windowScale);
-            });
-        }
-
-        public void CloseAppWithAnimation()
-        {
-            AppleTheme.AnimateWindowOut(this, windowScale, () =>
-            {
-                engine.CleanupWaveIn();
-                Application.Current.Shutdown();
-            });
-        }
-
-        protected override void OnClosed(EventArgs e)
-        {
-            try
-            {
-                IntPtr handle = new WindowInteropHelper(this).Handle;
-                UnregisterHotKey(handle, HOTKEY_ID);
-            }
-            catch { }
-            engine.CleanupWaveIn();
-            base.OnClosed(e);
-        }
-    }
-
-    // ==========================================
-    // MODO PÃLDORA (DYNAMIC ISLAND ESTILO APPLE)
-    // ==========================================
-    public class PillWindow : Window
-    {
-        private AudioRecorderEngine engine;
-        private MainWindow parentMain;
-        private ScaleTransform pillScale;
-        private bool positionedOnce = false;
-
-        private Ellipse recDot;
-        private TextBlock lblPillTimer;
-        private AppleWaveformVisualizer miniWave;
-        private AppleButton btnRecToggle;
-        private AppleButton btnContToggle;
-        private AppleButton btnCopy;
-        private AppleButton btnExpand;
-        private AppleButton btnClosePill;
-        private DispatcherTimer pillTimer;
-
-        public PillWindow(AudioRecorderEngine eng, MainWindow main)
-        {
-            this.engine = eng;
-            this.parentMain = main;
-
-            BuildDynamicIslandUI();
-
-            engine.OnAudioLevel += (lvl) => miniWave.SetState(lvl, engine.IsRecording && !engine.IsPaused);
-            engine.OnStateChanged += SyncPillButtons;
-            engine.OnStatusChanged += (title, sub, tag) =>
-            {
-                if (!Dispatcher.CheckAccess())
-                {
-                    Dispatcher.BeginInvoke(new Action(() => UpdatePillDot(tag)));
-                    return;
-                }
-                UpdatePillDot(tag);
-            };
-
-            pillTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
-            pillTimer.Tick += (s, e) =>
-            {
-                if (!this.IsVisible) return;
-                TimeSpan t = engine.TotalElapsedTime;
-                lblPillTimer.Text = string.Format("{0:D2}:{1:D2}", (int)t.TotalMinutes, t.Seconds);
-                miniWave.StepFrame();
-            };
-            pillTimer.Start();
-        }
-
-        private void BuildDynamicIslandUI()
-        {
-            this.Title = "Transcriptor â€” PÃ­ldora";
-            this.Width = 420;
-            this.Height = 76;
-            this.WindowStyle = WindowStyle.None;
-            this.AllowsTransparency = true;
-            this.Background = Brushes.Transparent;
-            this.Topmost = true;
-            this.ShowInTaskbar = false;
-            this.ResizeMode = ResizeMode.NoResize;
-            this.FontFamily = new FontFamily("Segoe UI, -apple-system, BlinkMacSystemFont");
-
-            pillScale = new ScaleTransform(1, 1);
-
-            var pillBorder = new Border
-            {
-                Margin = new Thickness(12),
-                CornerRadius = new CornerRadius(26),
-                Background = AppleTheme.BgBlack,
-                BorderBrush = AppleTheme.BorderHighlight,
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(14, 0, 10, 0),
-                RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform = pillScale,
-                Effect = new DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    BlurRadius = 20,
-                    ShadowDepth = 5,
-                    Opacity = 0.85
-                }
-            };
-
-            pillBorder.MouseLeftButtonDown += (s, e) =>
-            {
-                if (e.ButtonState == MouseButtonState.Pressed) this.DragMove();
-            };
-
-            var row = new Grid { VerticalAlignment = VerticalAlignment.Center };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Dot + Reloj
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Onda
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Botones
-
-            var leftInfo = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.SizeAll
-            };
-
-            recDot = new Ellipse
-            {
-                Width = 8,
-                Height = 8,
-                Fill = AppleTheme.AppleGreen,
-                Margin = new Thickness(2, 0, 8, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            lblPillTimer = new TextBlock
-            {
-                Text = "00:00",
-                Foreground = AppleTheme.TextWhite,
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = 14,
-                FontWeight = FontWeights.Bold,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            leftInfo.Children.Add(recDot);
-            leftInfo.Children.Add(lblPillTimer);
-
-            miniWave = new AppleWaveformVisualizer(14)
-            {
-                Height = 28,
-                Margin = new Thickness(10, 0, 10, 0),
-                Cursor = Cursors.SizeAll
-            };
-
-            var btnStack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-
-            btnRecToggle = new AppleButton("â—", 17, AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.AppleRed, 13, FontWeights.Bold)
-            {
-                Width = 34,
-                Height = 34,
-                Margin = new Thickness(0, 0, 6, 0),
-                ToolTip = "Empezar / Finalizar grabaciÃ³n (Alt + M)"
-            };
-            btnRecToggle.Click += async (s, e) =>
-            {
-                if (engine.IsProcessing) return;
-                if (!engine.IsRecording) engine.StartRecording(append: false);
-                else await engine.StopRecordingAndTranscribeAsync();
-            };
-
-            btnContToggle = new AppleButton("+", 17, AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite, 15, FontWeights.SemiBold)
-            {
-                Width = 34,
-                Height = 34,
-                Margin = new Thickness(0, 0, 6, 0),
-                ToolTip = "Seguir grabando (sin borrar lo anterior) / Pausar"
-            };
-            btnContToggle.Click += (s, e) =>
-            {
-                if (engine.IsProcessing) return;
-                if (!engine.IsRecording) engine.StartRecording(append: true);
-                else if (!engine.IsPaused) engine.PauseRecording();
-                else engine.ResumeRecording();
-            };
-
-            btnCopy = new AppleButton("Copiar", 16, AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite, 11, FontWeights.SemiBold)
-            {
-                Width = 54,
-                Height = 34,
-                Margin = new Thickness(0, 0, 6, 0),
-                ToolTip = "Copiar todo el texto al portapapeles"
-            };
-            btnCopy.Click += (s, e) =>
-            {
-                string t = (engine.AccumulatedText ?? "").Trim();
-                if (!string.IsNullOrEmpty(t))
-                {
-                    try
-                    {
-                        Clipboard.SetText(t);
-                        FlashPillCopied();
-                    }
-                    catch { }
-                }
-            };
-
-            btnExpand = new AppleButton("â†—", 16, AppleTheme.CardDark, AppleTheme.BtnDarkHover, AppleTheme.TextMuted, 12, FontWeights.Bold)
-            {
-                Width = 32,
-                Height = 34,
-                Margin = new Thickness(0, 0, 4, 0),
-                ToolTip = "Expandir ventana principal"
-            };
-            btnExpand.Click += (s, e) => parentMain.RestoreFromPillMode();
-
-            btnClosePill = new AppleButton("âœ•", 16, AppleTheme.CardDark, AppleTheme.AppleRed, AppleTheme.TextMuted, 10.5, FontWeights.Bold)
-            {
-                Width = 32,
-                Height = 34,
-                ToolTip = "Cerrar Transcriptor"
-            };
-            btnClosePill.Click += (s, e) =>
-            {
-                HideWithAnimation(() =>
-                {
-                    engine.CleanupWaveIn();
-                    Application.Current.Shutdown();
-                });
-            };
-
-            btnStack.Children.Add(btnRecToggle);
-            btnStack.Children.Add(btnContToggle);
-            btnStack.Children.Add(btnCopy);
-            btnStack.Children.Add(btnExpand);
-            btnStack.Children.Add(btnClosePill);
-
-            Grid.SetColumn(leftInfo, 0);
-            Grid.SetColumn(miniWave, 1);
-            Grid.SetColumn(btnStack, 2);
-
-            row.Children.Add(leftInfo);
-            row.Children.Add(miniWave);
-            row.Children.Add(btnStack);
-
-            pillBorder.Child = row;
-            this.Content = pillBorder;
-        }
-
-        private void FlashPillCopied()
-        {
-            btnCopy.Text = "âœ“";
-            btnCopy.SetPalette(AppleTheme.AppleGreen, AppleTheme.AppleGreen, AppleTheme.BgBlack);
-            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1600) };
-            t.Tick += (s, e) =>
-            {
-                t.Stop();
-                btnCopy.Text = "Copiar";
-                btnCopy.SetPalette(AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite);
-            };
-            t.Start();
-        }
-
-        private void UpdatePillDot(string tag)
-        {
-            if (tag == "rec") recDot.Fill = AppleTheme.AppleRed;
-            else if (tag == "pause" || tag == "work") recDot.Fill = AppleTheme.AppleAmber;
-            else recDot.Fill = AppleTheme.AppleGreen;
-
-            if (tag == "done")
-            {
-                FlashPillCopied();
-            }
-        }
-
-        private void SyncPillButtons()
-        {
-            if (!Dispatcher.CheckAccess())
-            {
-                Dispatcher.BeginInvoke(new Action(SyncPillButtons));
-                return;
-            }
-
-            if (engine.IsProcessing)
-            {
-                btnRecToggle.IsDisabled = true;
-                btnContToggle.IsDisabled = true;
-                btnRecToggle.Text = "â€¦";
-            }
-            else if (engine.IsRecording)
-            {
-                btnRecToggle.IsDisabled = false;
-                btnContToggle.IsDisabled = false;
-                btnRecToggle.Text = "â– ";
-                btnRecToggle.SetPalette(AppleTheme.AppleRed, AppleTheme.AppleRedHover, AppleTheme.TextWhite);
-
-                if (engine.IsPaused)
-                {
-                    btnContToggle.Text = "â–¶";
-                    btnContToggle.SetPalette(AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.BgBlack);
-                }
-                else
-                {
-                    btnContToggle.Text = "âšâš";
-                    btnContToggle.SetPalette(AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite);
-                }
-            }
-            else
-            {
-                btnRecToggle.IsDisabled = false;
-                btnContToggle.IsDisabled = false;
-                btnRecToggle.Text = "â—";
-                btnRecToggle.SetPalette(AppleTheme.BtnWhiteBg, AppleTheme.BtnWhiteHover, AppleTheme.AppleRed);
-
-                btnContToggle.Text = "+";
-                btnContToggle.SetPalette(AppleTheme.BtnDarkBg, AppleTheme.BtnDarkHover, AppleTheme.TextWhite);
-            }
-        }
-
-        public void ShowWithAnimation()
-        {
-            if (!positionedOnce)
-            {
-                this.Left = (SystemParameters.WorkArea.Width - this.Width) / 2.0;
-                this.Top = SystemParameters.WorkArea.Top + 14;
-                positionedOnce = true;
-            }
-            this.Show();
-            this.Topmost = true;
-            AppleTheme.AnimateWindowIn(this, pillScale);
-        }
-
-        public void HideWithAnimation(Action afterHide)
-        {
-            AppleTheme.AnimateWindowOut(this, pillScale, () =>
-            {
-                this.Hide();
-                if (afterHide != null) afterHide();
-            });
         }
     }
 
@@ -2019,7 +2225,8 @@ namespace TranscriptorApp
             }
 
             var app = new Application();
-            app.Run(new MainWindow());
+            // Inicia directamente en Modo PÃ­ldora (Dynamic Island) como ventana principal
+            app.Run(new PillWindow());
         }
     }
 }
