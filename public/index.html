@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Transcriptor" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <title>Transcriptor</title>
+  <style>
+    :root {
+      --bg-pure: #000000;
+      --bg-shell: #060608;
+      --card-bg: #111114;
+      --card-inner: #0a0a0d;
+      --border-subtle: #222228;
+      --border-light: rgba(255, 255, 255, 0.09);
+      --text-white: #f5f5f7;
+      --text-muted: #86868b;
+      --text-dim: #515158;
+      --btn-dark: #1c1c21;
+      --btn-dark-hover: #282830;
+      --apple-red: #ff3b30;
+      --apple-green: #30d158;
+      --apple-amber: #ff9f0a;
+      --spring: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100dvh;
+      background-color: var(--bg-pure);
+      color: var(--text-white);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Animación de entrada estilo macOS / iOS */
+    @keyframes windowOpen {
+      0% { opacity: 0; transform: scale(0.94) translateY(8px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .app-wrapper {
+      max-width: 520px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: max(18px, env(safe-area-inset-top)) 20px max(22px, env(safe-area-inset-bottom)) 20px;
+      animation: windowOpen 0.36s var(--spring) forwards;
+      transition: opacity 0.24s var(--spring), transform 0.24s var(--spring);
+    }
+
+    .app-wrapper.pill-hidden {
+      opacity: 0;
+      transform: scale(0.93) translateY(-14px);
+      pointer-events: none;
+      height: 0;
+      min-height: 0;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    /* Cabecera Sobria estilo Apple */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 2px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-white);
+    }
+
+    .brand-title {
+      font-size: 1.08rem;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      color: var(--text-white);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Tarjetas Sobrias con Esquinas Perfectas */
+    .apple-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+    }
+
+    /* Tarjeta de Estado y Onda */
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .status-group {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 3px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--apple-green);
+      transition: background 0.25s ease, transform 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .status-dot.recording {
+      background: var(--apple-red);
+      box-shadow: 0 0 10px rgba(255, 59, 48, 0.7);
+      animation: pulseRec 1.2s infinite ease-in-out;
+    }
+
+    @keyframes pulseRec {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.55; }
+    }
+
+    .status-title {
+      font-size: 0.96rem;
+      font-weight: 600;
+      color: var(--text-white);
+      letter-spacing: -0.1px;
+    }
+
+    .status-subtitle {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .timer-digits {
+      font-family: "SF Mono", "Consolas", ui-monospace, monospace;
+      font-size: 1.85rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text-white);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .wave-container {
+      width: 100%;
+      height: 76px;
+      background: var(--card-inner);
+      border: 1px solid var(--border-light);
+      border-radius: 14px;
+      overflow: hidden;
+      padding: 4px 6px;
+    }
+
+    #mainWaveCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Botones Apple Pro */
+    .btn-apple {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid var(--border-light);
+      border-radius: 15px;
+      font-family: inherit;
+      font-size: 0.94rem;
+      font-weight: 600;
+      letter-spacing: -0.1px;
+      padding: 15px 16px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.18s ease, color 0.18s ease, transform 0.14s var(--spring), opacity 0.18s ease;
+    }
+
+    .btn-apple:active:not(:disabled) {
+      transform: scale(0.965);
+    }
+
+    .btn-apple:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-white {
+      background: var(--text-white);
+      color: var(--bg-pure);
+      border-color: transparent;
+    }
+
+    .btn-white:hover:not(:disabled) {
+      background: #ffffff;
+    }
+
+    .btn-dark {
+      background: var(--btn-dark);
+      color: var(--text-white);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .btn-dark:hover:not(:disabled) {
+      background: var(--btn-dark-hover);
+    }
+
+    .btn-red {
+      background: var(--apple-red);
+      color: #ffffff;
+      border-color: transparent;
+    }
+
+    .btn-green {
+      background: var(--apple-green);
+      color: #000000;
+      border-color: transparent;
+    }
+
+    .btn-chip {
+      padding: 7px 13px;
+      font-size: 0.76rem;
+      font-weight: 500;
+      border-radius: 999px;
+      background: var(--card-bg);
+      color: var(--text-white);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn-chip:hover {
+      background: var(--btn-dark-hover);
+    }
+
+    .controls-row {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 12px;
+    }
+
+    /* Tarjeta de Transcripción */
+    .transcript-card {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 220px;
+    }
+
+    .transcript-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .transcript-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .word-count {
+      color: var(--text-dim);
+      font-weight: 400;
+    }
+
+    #txtResult {
+      flex: 1;
+      width: 100%;
+      min-height: 170px;
+      background: var(--card-inner);
+      color: var(--text-white);
+      border: 1px solid var(--border-light);
+      border-radius: 14px;
+      padding: 14px;
+      font-family: inherit;
+      font-size: 0.98rem;
+      line-height: 1.55;
+      resize: none;
+      outline: none;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    #txtResult::placeholder {
+      color: var(--text-dim);
+    }
+
+    #txtResult:focus {
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    #txtResult::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #txtResult::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #txtResult::-webkit-scrollbar-thumb {
+      background: #2c2c34;
+      border-radius: 999px;
+    }
+
+    .bottom-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-copy-main {
+      flex: 1;
+    }
+
+    .btn-share {
+      width: 52px;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    /* ==========================================
+       MODO PÍLDORA (DYNAMIC ISLAND ESTILO APPLE)
+       ========================================== */
+    .dynamic-pill {
+      position: fixed;
+      top: max(18px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%) scale(0.9);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(8, 8, 10, 0.94);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border: 1px solid #2e2e36;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.85);
+      touch-action: none;
+      transition: opacity 0.24s var(--spring), transform 0.24s var(--spring);
+      max-width: calc(100vw - 16px);
+    }
+
+    .dynamic-pill.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(-50%) scale(1);
+    }
+
+    .pill-drag-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: grab;
+      padding: 4px 4px 4px 6px;
+    }
+
+    .pill-timer {
+      font-family: "SF Mono", "Consolas", ui-monospace, monospace;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-white);
+      min-width: 44px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #miniWaveCanvas {
+      width: 64px;
+      height: 24px;
+      display: block;
+    }
+
+    .pill-circle-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      padding: 0;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .pill-copy-btn {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      font-size: 0.76rem;
+    }
+
+    /* ==========================================
+       MODAL DE API KEY (SOBRIO APPLE)
+       ========================================== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-subtle);
+      border-radius: 22px;
+      padding: 22px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+      animation: windowOpen 0.25s var(--spring) forwards;
+    }
+
+    .modal-title {
+      font-size: 1.02rem;
+      font-weight: 600;
+      color: var(--text-white);
+      margin-bottom: 6px;
+    }
+
+    .modal-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      margin-bottom: 14px;
+    }
+
+    .key-status {
+      font-size: 0.76rem;
+      padding: 9px 12px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      background: var(--card-inner);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+    }
+
+    .key-input {
+      width: 100%;
+      background: var(--card-inner);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: var(--text-white);
+      font-family: ui-monospace, monospace;
+      font-size: 0.88rem;
+      margin-bottom: 14px;
+      outline: none;
+    }
+
+    .key-input:focus {
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+  <!-- ==========================================
+       VENTANA PRINCIPAL: TRANSCRIPTOR
+       ========================================== -->
+  <main class="app-wrapper" id="mainWrapper">
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-title">Transcriptor</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn-apple btn-chip" id="btnOpenSettings">
+          Clave API: <span id="lblKeyState">...</span>
+        </button>
+        <button class="btn-apple btn-chip" id="btnEnterPillMode">
+          Modo Píldora
+        </button>
+      </div>
+    </header>
+
+    <!-- Tarjeta de Estado y Onda de Voz -->
+    <section class="apple-card">
+      <div class="hero-top">
+        <div class="status-group">
+          <div class="status-row">
+            <span class="status-dot" id="mainStatusDot"></span>
+            <span class="status-title" id="statusTitleText">Listo</span>
+          </div>
+          <div class="status-subtitle" id="statusSubtitle">
+            Trozos automáticos de 2 min (&lt; 22 MB) • Whisper Large v3
+          </div>
+        </div>
+        <div class="timer-digits" id="lblMainTimer">00:00</div>
+      </div>
+
+      <div class="wave-container">
+        <canvas id="mainWaveCanvas"></canvas>
+      </div>
+    </section>
+
+    <!-- Botones de Grabación -->
+    <section class="controls-row">
+      <button class="btn-apple btn-white" id="btnMainRecord">
+        Empezar Grabación
+      </button>
+      <button class="btn-apple btn-dark" id="btnMainContinue">
+        Seguir Grabando
+      </button>
+    </section>
+
+    <!-- Tarjeta de Transcripción -->
+    <section class="apple-card transcript-card">
+      <div class="transcript-header">
+        <div class="transcript-meta">
+          <span>TRANSCRIPCIÓN</span>
+          <span class="word-count" id="lblWordCount">• 0 palabras</span>
+        </div>
+        <button class="btn-apple btn-chip" id="btnClearText" style="padding: 4px 10px; font-size: 0.72rem;">
+          Limpiar
+        </button>
+      </div>
+      <textarea id="txtResult" placeholder="Tu transcripción aparecerá aquí..."></textarea>
+    </section>
+
+    <!-- Botón Copiar al Portapapeles + Compartir -->
+    <section class="bottom-row">
+      <button class="btn-apple btn-dark btn-copy-main" id="btnMainCopy">
+        Copiar al Portapapeles
+      </button>
+      <button class="btn-apple btn-dark btn-share" id="btnShareIos" title="Compartir">
+        ↗
+      </button>
+    </section>
+  </main>
+
+  <!-- ==========================================
+       MODO PÍLDORA (DYNAMIC ISLAND)
+       ========================================== -->
+  <div class="dynamic-pill" id="dynamicPill">
+    <div class="pill-drag-area" id="pillDragHandle" title="Arrastra la píldora">
+      <span class="status-dot" id="pillStatusDot"></span>
+      <span class="pill-timer" id="lblPillTimer">00:00</span>
+      <canvas id="miniWaveCanvas"></canvas>
+    </div>
+    <button class="btn-apple btn-white pill-circle-btn" id="btnPillRecord" title="Empezar / Finalizar" style="color: var(--apple-red);">●</button>
+    <button class="btn-apple btn-dark pill-circle-btn" id="btnPillContinue" title="Seguir Grabando / Pausar">+</button>
+    <button class="btn-apple btn-dark pill-copy-btn" id="btnPillCopy" title="Copiar al portapapeles">Copiar</button>
+    <button class="btn-apple btn-dark pill-circle-btn" id="btnPillRestore" title="Expandir ventana">↗</button>
+  </div>
+
+  <!-- ==========================================
+       MODAL DE CLAVE API (CERO HARDCODE)
+       ========================================== -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-title">Clave API de Groq</div>
+      <div class="modal-desc">
+        Tu clave nunca se guarda en el código. Puedes usar la variable <code>GROQ_API_KEY</code> en Vercel o pegarla aquí una sola vez para guardarla en este dispositivo.
+      </div>
+      <div class="key-status" id="modalKeyBanner">Comprobando...</div>
+      <input type="password" class="key-input" id="inputApiKey" placeholder="gsk_..." autocomplete="off" spellcheck="false" />
+      <div class="modal-actions">
+        <button class="btn-apple btn-chip" id="btnClearKey">Borrar local</button>
+        <button class="btn-apple btn-chip" id="btnCloseModal">Cerrar</button>
+        <button class="btn-apple btn-white" id="btnSaveKey" style="padding: 8px 16px; font-size: 0.82rem; border-radius: 999px;">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY_NAME = 'transcriptor_groq_api_key';
+    const STORAGE_TEXT_BACKUP = 'transcriptor_accumulated_text';
+    const TARGET_SAMPLE_RATE = 16000;
+    const CHUNK_SECONDS = 120; // 2 minutos (~3.66 MB < 22 MB)
+    const CHUNK_MAX_SAMPLES = TARGET_SAMPLE_RATE * CHUNK_SECONDS;
+
+    let serverHasApiKey = false;
+    let isRecording = false;
+    let isPaused = false;
+    let isProcessing = false;
+    let appendMode = false;
+
+    let accumulatedMs = 0;
+    let lastResumeTimestamp = 0;
+    let timerInterval = null;
+
+    let mediaStream = null;
+    let audioContext = null;
+    let mediaSource = null;
+    let processorNode = null;
+    let currentPcmSamples = [];
+    let currentSamplesCount = 0;
+    let currentChunkIndex = 0;
+    let activeChunkPromises = [];
+    let currentAudioLevel = 0;
+    let maxSessionLevel = 0;
+    let wakeLockSentinel = null;
+
+    const mainWrapper = document.getElementById('mainWrapper');
+    const dynamicPill = document.getElementById('dynamicPill');
+    const statusTitleText = document.getElementById('statusTitleText');
+    const statusSubtitle = document.getElementById('statusSubtitle');
+    const mainStatusDot = document.getElementById('mainStatusDot');
+    const pillStatusDot = document.getElementById('pillStatusDot');
+    const lblMainTimer = document.getElementById('lblMainTimer');
+    const lblPillTimer = document.getElementById('lblPillTimer');
+    const lblWordCount = document.getElementById('lblWordCount');
+    const txtResult = document.getElementById('txtResult');
+
+    const btnMainRecord = document.getElementById('btnMainRecord');
+    const btnMainContinue = document.getElementById('btnMainContinue');
+    const btnMainCopy = document.getElementById('btnMainCopy');
+    const btnShareIos = document.getElementById('btnShareIos');
+    const btnClearText = document.getElementById('btnClearText');
+    const btnEnterPillMode = document.getElementById('btnEnterPillMode');
+
+    const btnPillRecord = document.getElementById('btnPillRecord');
+    const btnPillContinue = document.getElementById('btnPillContinue');
+    const btnPillCopy = document.getElementById('btnPillCopy');
+    const btnPillRestore = document.getElementById('btnPillRestore');
+
+    const settingsModal = document.getElementById('settingsModal');
+    const btnOpenSettings = document.getElementById('btnOpenSettings');
+    const btnCloseModal = document.getElementById('btnCloseModal');
+    const btnSaveKey = document.getElementById('btnSaveKey');
+    const btnClearKey = document.getElementById('btnClearKey');
+    const inputApiKey = document.getElementById('inputApiKey');
+    const modalKeyBanner = document.getElementById('modalKeyBanner');
+    const lblKeyState = document.getElementById('lblKeyState');
+
+    function getLocalApiKey() {
+      return (localStorage.getItem(STORAGE_KEY_NAME) || '').trim();
+    }
+
+    async function checkApiConnectionStatus() {
+      try {
+        const res = await fetch('/api/transcribe', { method: 'GET' });
+        if (res.ok) {
+          const data = await res.json();
+          serverHasApiKey = Boolean(data && data.hasServerKey);
+        }
+      } catch (e) {
+        serverHasApiKey = false;
+      }
+      updateKeyStatusUI();
+    }
+
+    function updateKeyStatusUI() {
+      const localKey = getLocalApiKey();
+      if (localKey) {
+        lblKeyState.textContent = 'Activa';
+        modalKeyBanner.textContent = '✓ Clave guardada en este dispositivo (' + localKey.slice(0, 7) + '...)';
+        modalKeyBanner.style.color = '#30d158';
+      } else if (serverHasApiKey) {
+        lblKeyState.textContent = 'Cloud';
+        modalKeyBanner.textContent = '✓ Conectado mediante GROQ_API_KEY en Vercel.';
+        modalKeyBanner.style.color = '#30d158';
+      } else {
+        lblKeyState.textContent = 'Configurar';
+        modalKeyBanner.textContent = 'Ingresa tu clave de Groq (gsk_...) abajo para guardarla en tu dispositivo.';
+        modalKeyBanner.style.color = '#ff9f0a';
+      }
+    }
+
+    btnOpenSettings.addEventListener('click', () => {
+      inputApiKey.value = getLocalApiKey();
+      updateKeyStatusUI();
+      settingsModal.classList.add('open');
+    });
+
+    btnCloseModal.addEventListener('click', () => settingsModal.classList.remove('open'));
+
+    btnSaveKey.addEventListener('click', () => {
+      const val = inputApiKey.value.trim();
+      if (!val) return;
+      localStorage.setItem(STORAGE_KEY_NAME, val);
+      updateKeyStatusUI();
+      settingsModal.classList.remove('open');
+      setStatus('Clave guardada', 'Listo para grabar', 'idle');
+    });
+
+    btnClearKey.addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY_NAME);
+      inputApiKey.value = '';
+      updateKeyStatusUI();
+    });
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try { wakeLockSentinel = await navigator.wakeLock.request('screen'); } catch (e) {}
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLockSentinel) {
+        try { wakeLockSentinel.release(); } catch (e) {}
+        wakeLockSentinel = null;
+      }
+    }
+
+    function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
+      if (outputSampleRate === inputSampleRate) return buffer;
+      const ratio = inputSampleRate / outputSampleRate;
+      const newLength = Math.round(buffer.length / ratio);
+      const result = new Float32Array(newLength);
+      let offsetResult = 0;
+      let offsetBuffer = 0;
+      while (offsetResult < result.length) {
+        const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+        let accum = 0, count = 0;
+        for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+          accum += buffer[i];
+          count++;
+        }
+        result[offsetResult] = count > 0 ? accum / count : 0;
+        offsetResult++;
+        offsetBuffer = nextOffsetBuffer;
+      }
+      return result;
+    }
+
+    function encodeWavFromFloat32Chunks(float32Chunks, totalSamples, sampleRate) {
+      const bytesPerSample = 2;
+      const dataLength = totalSamples * bytesPerSample;
+      const buffer = new ArrayBuffer(44 + dataLength);
+      const view = new DataView(buffer);
+
+      function writeAscii(offset, str) {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+      }
+
+      writeAscii(0, 'RIFF');
+      view.setUint32(4, 36 + dataLength, true);
+      writeAscii(8, 'WAVE');
+      writeAscii(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * bytesPerSample, true);
+      view.setUint16(32, bytesPerSample, true);
+      view.setUint16(34, 16, true);
+      writeAscii(36, 'data');
+      view.setUint32(40, dataLength, true);
+
+      let offset = 44;
+      for (let c = 0; c < float32Chunks.length; c++) {
+        const chunk = float32Chunks[c];
+        for (let i = 0; i < chunk.length; i++) {
+          const s = Math.max(-1, Math.min(1, chunk[i]));
+          view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+          offset += 2;
+        }
+      }
+      return new Blob([buffer], { type: 'audio/wav' });
+    }
+
+    async function startRecordingSession(append) {
+      if (isProcessing) return;
+
+      const localKey = getLocalApiKey();
+      if (!localKey && !serverHasApiKey) {
+        settingsModal.classList.add('open');
+        return;
+      }
+
+      try {
+        appendMode = append;
+        if (!append) {
+          txtResult.value = '';
+          localStorage.removeItem(STORAGE_TEXT_BACKUP);
+          accumulatedMs = 0;
+          updateWordCount();
+          updateTimerDisplay(0);
+        }
+
+        currentPcmSamples = [];
+        currentSamplesCount = 0;
+        currentChunkIndex = 0;
+        maxSessionLevel = 0;
+        activeChunkPromises = [];
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioCtx();
+        if (audioContext.state === 'suspended') await audioContext.resume();
+
+        const inputRate = audioContext.sampleRate;
+        mediaSource = audioContext.createMediaStreamSource(mediaStream);
+        processorNode = audioContext.createScriptProcessor(2048, 1, 1);
+
+        processorNode.onaudioprocess = (event) => {
+          if (!isRecording || isPaused) {
+            currentAudioLevel = 0;
+            return;
+          }
+
+          const inputData = event.inputBuffer.getChannelData(0);
+          let maxPeak = 0;
+          for (let i = 0; i < inputData.length; i += 2) {
+            const abs = Math.abs(inputData[i]);
+            if (abs > maxPeak) maxPeak = abs;
+          }
+          currentAudioLevel = Math.min(1.0, maxPeak * 2.6);
+          if (currentAudioLevel > maxSessionLevel) maxSessionLevel = currentAudioLevel;
+
+          const downsampled = downsampleBuffer(inputData, inputRate, TARGET_SAMPLE_RATE);
+          currentPcmSamples.push(downsampled);
+          currentSamplesCount += downsampled.length;
+
+          if (currentSamplesCount >= CHUNK_MAX_SAMPLES) {
+            dispatchCurrentTwoMinuteChunk();
+          }
+        };
+
+        mediaSource.connect(processorNode);
+        processorNode.connect(audioContext.destination);
+
+        isRecording = true;
+        isPaused = false;
+        lastResumeTimestamp = Date.now();
+        await requestWakeLock();
+
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(onTimerTick, 150);
+
+        setStatus(
+          append ? 'Continuando grabación' : 'Grabando',
+          append ? 'Se añadirá al final de tu texto actual' : 'Corte automático cada 2 min (< 22 MB)',
+          'rec'
+        );
+        syncButtonsUI();
+      } catch (err) {
+        cleanupAudioResources();
+        setStatus('Sin acceso al micrófono', 'Permite el uso del micrófono en tu navegador', 'err');
+      }
+    }
+
+    function pauseRecordingSession() {
+      if (!isRecording || isPaused) return;
+      isPaused = true;
+      accumulatedMs += Date.now() - lastResumeTimestamp;
+      currentAudioLevel = 0;
+      setStatus('En pausa', 'Pulsa "Seguir Grabando" para reanudar o "Finalizar"', 'pause');
+      syncButtonsUI();
+    }
+
+    async function resumeRecordingSession() {
+      if (!isRecording || !isPaused) return;
+      if (audioContext && audioContext.state === 'suspended') {
+        try { await audioContext.resume(); } catch (e) {}
+      }
+      isPaused = false;
+      lastResumeTimestamp = Date.now();
+      setStatus('Grabando', 'Grabación reanudada sin perder audio', 'rec');
+      syncButtonsUI();
+    }
+
+    function dispatchCurrentTwoMinuteChunk() {
+      if (currentSamplesCount === 0 || currentPcmSamples.length === 0) return;
+
+      const samples = currentPcmSamples;
+      const total = currentSamplesCount;
+      currentPcmSamples = [];
+      currentSamplesCount = 0;
+
+      const chunkIdx = ++currentChunkIndex;
+      const wavBlob = encodeWavFromFloat32Chunks(samples, total, TARGET_SAMPLE_RATE);
+      const sizeMb = (wavBlob.size / (1024 * 1024)).toFixed(1);
+
+      setStatus(
+        `Grabando (Tramo #${chunkIdx + 1})`,
+        `Transcribiendo tramo #${chunkIdx} (${sizeMb} MB) en segundo plano...`,
+        'rec'
+      );
+
+      activeChunkPromises.push(sendWavChunkToWhisper(wavBlob, chunkIdx));
+    }
+
+    async function stopRecordingAndTranscribe() {
+      if (!isRecording) return;
+
+      if (!isPaused) accumulatedMs += Date.now() - lastResumeTimestamp;
+
+      isRecording = false;
+      isPaused = false;
+      isProcessing = true;
+      currentAudioLevel = 0;
+
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+
+      releaseWakeLock();
+      syncButtonsUI();
+      setStatus('Transcribiendo...', 'Procesando con Whisper Large v3...', 'work');
+
+      try {
+        if (activeChunkPromises.length === 0 && maxSessionLevel < 0.025) {
+          cleanupAudioResources();
+          setStatus('Sin voz detectada', 'No se detectó sonido en el micrófono', 'idle');
+          return;
+        }
+
+        if (currentSamplesCount > TARGET_SAMPLE_RATE / 5) {
+          const chunkIdx = ++currentChunkIndex;
+          const wavBlob = encodeWavFromFloat32Chunks(currentPcmSamples, currentSamplesCount, TARGET_SAMPLE_RATE);
+          currentPcmSamples = [];
+          currentSamplesCount = 0;
+          activeChunkPromises.push(sendWavChunkToWhisper(wavBlob, chunkIdx));
+        }
+
+        cleanupAudioResources();
+
+        if (activeChunkPromises.length === 0) {
+          setStatus('Grabación muy corta', 'Mantén la grabación al menos 1 segundo', 'idle');
+          return;
+        }
+
+        const results = await Promise.all(activeChunkPromises);
+        results.sort((a, b) => a.index - b.index);
+
+        const errors = results.filter(r => !r.success).map(r => r.error);
+        const texts = results.filter(r => r.success && r.text.trim()).map(r => r.text.trim());
+        let newTranscript = texts.join(' ').trim();
+
+        if (maxSessionLevel < 0.05 && /^(thank you\.?|gracias\.?)$/i.test(newTranscript)) {
+          newTranscript = '';
+        }
+
+        if (newTranscript) {
+          const existing = txtResult.value.trim();
+          txtResult.value = (appendMode && existing) ? (existing + ' ' + newTranscript) : newTranscript;
+          localStorage.setItem(STORAGE_TEXT_BACKUP, txtResult.value);
+          updateWordCount();
+          txtResult.scrollTop = txtResult.scrollHeight;
+
+          const copiedAuto = await copyTextSilently(txtResult.value);
+          if (copiedAuto) {
+            flashCopyFeedback();
+            setStatus('Copiado al portapapeles', 'Listo para pegar o seguir grabando', 'done');
+          } else {
+            setStatus('Transcripción lista', 'Toca "Copiar al Portapapeles" para copiar el texto', 'done');
+          }
+        } else if (errors.length > 0) {
+          setStatus('Error de red', errors[0], 'err');
+        } else {
+          setStatus('Sin voz detectada', 'Intenta hablar más cerca del micrófono', 'idle');
+        }
+      } catch (err) {
+        setStatus('Error', err.message || 'Fallo al transcribir', 'err');
+      } finally {
+        isProcessing = false;
+        syncButtonsUI();
+      }
+    }
+
+    async function sendWavChunkToWhisper(wavBlob, index) {
+      const localKey = getLocalApiKey();
+
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          if (localKey) {
+            const formData = new FormData();
+            formData.append('file', wavBlob, `chunk_${index}.wav`);
+            formData.append('model', 'whisper-large-v3');
+            formData.append('temperature', '0');
+            formData.append('response_format', 'json');
+
+            const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${localKey}` },
+              body: formData
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((data.error && data.error.message) || `Error HTTP ${res.status}`);
+            return { index, success: true, text: data.text || '' };
+          } else {
+            const res = await fetch('/api/transcribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'audio/wav' },
+              body: wavBlob
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || `Error HTTP ${res.status}`);
+            return { index, success: true, text: data.text || '' };
+          }
+        } catch (err) {
+          if (attempt >= 2) return { index, success: false, error: err.message || 'Error de red' };
+          await new Promise(r => setTimeout(r, 900));
+        }
+      }
+    }
+
+    function cleanupAudioResources() {
+      if (processorNode) { try { processorNode.disconnect(); } catch (e) {} processorNode = null; }
+      if (mediaSource) { try { mediaSource.disconnect(); } catch (e) {} mediaSource = null; }
+      if (mediaStream) { try { mediaStream.getTracks().forEach(t => t.stop()); } catch (e) {} mediaStream = null; }
+      if (audioContext) { try { audioContext.close(); } catch (e) {} audioContext = null; }
+    }
+
+    async function copyTextSilently(text) {
+      if (!text || !text.trim()) return false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text.trim());
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    async function copyTextWithUserGesture() {
+      const text = txtResult.value.trim();
+      if (!text) {
+        setStatus('Sin texto', 'Graba algo primero para copiar al portapapeles', 'pause');
+        return;
+      }
+
+      let copied = await copyTextSilently(text);
+      if (!copied) {
+        try {
+          const temp = document.createElement('textarea');
+          temp.value = text;
+          temp.style.position = 'fixed';
+          temp.style.opacity = '0';
+          document.body.appendChild(temp);
+          temp.focus();
+          temp.select();
+          temp.setSelectionRange(0, text.length);
+          copied = document.execCommand('copy');
+          document.body.removeChild(temp);
+        } catch (e) {}
+      }
+
+      if (copied) {
+        flashCopyFeedback();
+        setStatus('Copiado al portapapeles', 'Todo tu texto está listo para pegar', 'done');
+      }
+    }
+
+    function flashCopyFeedback() {
+      btnMainCopy.textContent = '✓ Copiado al Portapapeles';
+      btnMainCopy.className = 'btn-apple btn-green btn-copy-main';
+      btnPillCopy.textContent = '✓';
+      btnPillCopy.className = 'btn-apple btn-green pill-copy-btn';
+
+      setTimeout(() => {
+        btnMainCopy.textContent = 'Copiar al Portapapeles';
+        btnMainCopy.className = 'btn-apple btn-dark btn-copy-main';
+        btnPillCopy.textContent = 'Copiar';
+        btnPillCopy.className = 'btn-apple btn-dark pill-copy-btn';
+      }, 1800);
+    }
+
+    btnShareIos.addEventListener('click', async () => {
+      const text = txtResult.value.trim();
+      if (!text) return;
+      if (navigator.share) {
+        try { await navigator.share({ text }); } catch (e) {}
+      } else {
+        await copyTextWithUserGesture();
+      }
+    });
+
+    function handleRecordToggle() {
+      if (isProcessing) return;
+      if (!isRecording) startRecordingSession(false);
+      else stopRecordingAndTranscribe();
+    }
+
+    function handleContinueOrPauseToggle() {
+      if (isProcessing) return;
+      if (!isRecording) startRecordingSession(true);
+      else if (!isPaused) pauseRecordingSession();
+      else resumeRecordingSession();
+    }
+
+    btnMainRecord.addEventListener('click', handleRecordToggle);
+    btnPillRecord.addEventListener('click', handleRecordToggle);
+
+    btnMainContinue.addEventListener('click', handleContinueOrPauseToggle);
+    btnPillContinue.addEventListener('click', handleContinueOrPauseToggle);
+
+    btnMainCopy.addEventListener('click', copyTextWithUserGesture);
+    btnPillCopy.addEventListener('click', copyTextWithUserGesture);
+
+    btnClearText.addEventListener('click', () => {
+      txtResult.value = '';
+      localStorage.removeItem(STORAGE_TEXT_BACKUP);
+      accumulatedMs = 0;
+      updateTimerDisplay(0);
+      updateWordCount();
+      setStatus('Listo', 'Trozos automáticos de 2 min • Whisper Large v3', 'idle');
+    });
+
+    txtResult.addEventListener('input', () => {
+      localStorage.setItem(STORAGE_TEXT_BACKUP, txtResult.value);
+      updateWordCount();
+    });
+
+    function syncButtonsUI() {
+      if (isProcessing) {
+        btnMainRecord.disabled = true;
+        btnMainContinue.disabled = true;
+        btnPillRecord.disabled = true;
+        btnPillContinue.disabled = true;
+
+        btnMainRecord.textContent = 'Transcribiendo...';
+        btnMainRecord.className = 'btn-apple btn-dark';
+        btnPillRecord.textContent = '…';
+      } else if (isRecording) {
+        btnMainRecord.disabled = false;
+        btnMainContinue.disabled = false;
+        btnPillRecord.disabled = false;
+        btnPillContinue.disabled = false;
+
+        btnMainRecord.textContent = 'Finalizar Grabación';
+        btnMainRecord.className = 'btn-apple btn-red';
+        btnPillRecord.textContent = '■';
+        btnPillRecord.className = 'btn-apple btn-red pill-circle-btn';
+        btnPillRecord.style.color = '#ffffff';
+
+        if (isPaused) {
+          btnMainContinue.textContent = 'Seguir Grabando';
+          btnMainContinue.className = 'btn-apple btn-white';
+          btnPillContinue.textContent = '▶';
+          btnPillContinue.className = 'btn-apple btn-white pill-circle-btn';
+        } else {
+          btnMainContinue.textContent = 'Pausar';
+          btnMainContinue.className = 'btn-apple btn-dark';
+          btnPillContinue.textContent = '❚❚';
+          btnPillContinue.className = 'btn-apple btn-dark pill-circle-btn';
+        }
+      } else {
+        btnMainRecord.disabled = false;
+        btnMainContinue.disabled = false;
+        btnPillRecord.disabled = false;
+        btnPillContinue.disabled = false;
+
+        btnMainRecord.textContent = 'Empezar Grabación';
+        btnMainRecord.className = 'btn-apple btn-white';
+        btnPillRecord.textContent = '●';
+        btnPillRecord.className = 'btn-apple btn-white pill-circle-btn';
+        btnPillRecord.style.color = 'var(--apple-red)';
+
+        btnMainContinue.textContent = 'Seguir Grabando';
+        btnMainContinue.className = 'btn-apple btn-dark';
+        btnPillContinue.textContent = '+';
+        btnPillContinue.className = 'btn-apple btn-dark pill-circle-btn';
+      }
+    }
+
+    function setStatus(title, subtitle, tag) {
+      statusTitleText.textContent = title;
+      statusSubtitle.textContent = subtitle;
+
+      let dotColor = 'var(--apple-green)';
+      if (tag === 'rec' || tag === 'err') dotColor = 'var(--apple-red)';
+      else if (tag === 'pause' || tag === 'work') dotColor = 'var(--apple-amber)';
+
+      mainStatusDot.style.background = dotColor;
+      pillStatusDot.style.background = dotColor;
+
+      if (tag === 'rec') {
+        mainStatusDot.classList.add('recording');
+        pillStatusDot.classList.add('recording');
+      } else {
+        mainStatusDot.classList.remove('recording');
+        pillStatusDot.classList.remove('recording');
+      }
+    }
+
+    function onTimerTick() {
+      const total = isPaused ? accumulatedMs : (accumulatedMs + (Date.now() - lastResumeTimestamp));
+      updateTimerDisplay(total);
+    }
+
+    function updateTimerDisplay(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+      const secs = String(totalSeconds % 60).padStart(2, '0');
+      const formatted = `${mins}:${secs}`;
+      lblMainTimer.textContent = formatted;
+      lblPillTimer.textContent = formatted;
+    }
+
+    function updateWordCount() {
+      const t = txtResult.value.trim();
+      const count = t ? t.split(/\s+/).length : 0;
+      lblWordCount.textContent = `• ${count} palabra${count === 1 ? '' : 's'}`;
+    }
+
+    // Modo Píldora (Dynamic Island)
+    btnEnterPillMode.addEventListener('click', () => {
+      mainWrapper.classList.add('pill-hidden');
+      dynamicPill.classList.add('visible');
+    });
+
+    btnPillRestore.addEventListener('click', () => {
+      dynamicPill.classList.remove('visible');
+      mainWrapper.classList.remove('pill-hidden');
+    });
+
+    (function enablePillDrag() {
+      const handle = document.getElementById('pillDragHandle');
+      let dragging = false, startX = 0, startY = 0, initLeft = 0, initTop = 0;
+
+      function startDrag(cx, cy) {
+        const rect = dynamicPill.getBoundingClientRect();
+        dynamicPill.style.transform = 'scale(1)';
+        dynamicPill.style.left = rect.left + 'px';
+        dynamicPill.style.top = rect.top + 'px';
+        dragging = true;
+        startX = cx; startY = cy;
+        initLeft = rect.left; initTop = rect.top;
+      }
+
+      function moveDrag(cx, cy) {
+        if (!dragging) return;
+        const maxL = window.innerWidth - dynamicPill.offsetWidth - 8;
+        const maxT = window.innerHeight - dynamicPill.offsetHeight - 8;
+        dynamicPill.style.left = Math.max(8, Math.min(maxL, initLeft + (cx - startX))) + 'px';
+        dynamicPill.style.top = Math.max(8, Math.min(maxT, initTop + (cy - startY))) + 'px';
+      }
+
+      handle.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
+      window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+      window.addEventListener('mouseup', () => { dragging = false; });
+
+      handle.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      window.addEventListener('touchmove', (e) => {
+        if (dragging && e.touches.length === 1) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      window.addEventListener('touchend', () => { dragging = false; });
+    })();
+
+    // Visualizador Apple Voice Memos a 60 FPS
+    const mainCanvas = document.getElementById('mainWaveCanvas');
+    const miniCanvas = document.getElementById('miniWaveCanvas');
+    const mainCurrent = new Array(40).fill(4);
+    const miniCurrent = new Array(14).fill(4);
+    let phase = 0;
+
+    function animateWaveform() {
+      phase += 0.14;
+      const activeRec = isRecording && !isPaused;
+
+      updateBarsArray(mainCurrent, 40, activeRec, 60);
+      updateBarsArray(miniCurrent, 14, activeRec, 20);
+
+      drawAppleBars(mainCanvas, mainCurrent, activeRec);
+      if (dynamicPill.classList.contains('visible')) {
+        drawAppleBars(miniCanvas, miniCurrent, activeRec);
+      }
+
+      requestAnimationFrame(animateWaveform);
+    }
+
+    function updateBarsArray(arr, count, activeRec, maxH) {
+      for (let i = 0; i < count; i++) {
+        const centerDist = Math.abs(i - (count - 1) / 2) / (count / 2);
+        const envelope = Math.max(0.15, 1.0 - centerDist * 0.78);
+        let target = 4;
+
+        if (!activeRec) {
+          target = 3.5 + Math.sin(phase * 0.6 + i * 0.35) * 1.1;
+        } else if (currentAudioLevel < 0.03) {
+          target = 5 + Math.sin(phase + i * 0.45) * 2.2 * envelope;
+        } else {
+          const wave = 0.65 + 0.35 * Math.sin(phase * 1.9 + i * 0.55);
+          const jitter = 0.75 + Math.random() * 0.5;
+          const norm = Math.min(1.0, currentAudioLevel * envelope * wave * jitter * 1.45);
+          target = Math.max(5, norm * maxH);
+        }
+
+        arr[i] += (target - arr[i]) * 0.32;
+      }
+    }
+
+    function drawAppleBars(canvas, arr, activeRec) {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      if (canvas.width !== Math.round(rect.width * dpr) || canvas.height !== Math.round(rect.height * dpr)) {
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+      }
+
+      const ctx = canvas.getContext('2d');
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      const count = arr.length;
+      const totalSpace = rect.width - 12;
+      const step = totalSpace / count;
+      const barW = Math.max(2.5, Math.min(4.2, step * 0.48));
+
+      if (!activeRec) {
+        ctx.fillStyle = 'rgba(245, 245, 247, 0.25)';
+      } else if (currentAudioLevel < 0.03) {
+        ctx.fillStyle = 'rgba(255, 69, 58, 0.68)';
+      } else {
+        ctx.fillStyle = '#f5f5f7';
+      }
+
+      for (let i = 0; i < count; i++) {
+        const bh = Math.max(3.5, Math.min(rect.height - 4, arr[i]));
+        const x = 6 + i * step + (step - barW) / 2;
+        const y = (rect.height - bh) / 2;
+
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, barW, bh, barW / 2);
+        else ctx.rect(x, y, barW, bh);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.altKey && (e.key === 'm' || e.key === 'M' || e.code === 'KeyM')) {
+        e.preventDefault();
+        handleRecordToggle();
+      }
+    });
+
+    (function init() {
+      const savedText = localStorage.getItem(STORAGE_TEXT_BACKUP);
+      if (savedText) {
+        txtResult.value = savedText;
+        updateWordCount();
+      }
+      checkApiConnectionStatus();
+      requestAnimationFrame(animateWaveform);
+    })();
+  </script>
+</body>
+</html>

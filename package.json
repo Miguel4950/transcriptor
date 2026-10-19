@@ -1,0 +1,13 @@
+{
+  "name": "groq-whisper-liquid-glass",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Grabadora inteligente con Groq Whisper Large v3 (iPhone PWA + Web + PC) con estética Cyber Liquid Glass, corte de 2 minutos y Modo Volador.",
+  "scripts": {
+    "start": "echo 'Listo para desplegar en Vercel'"
+  },
+  "engines": {
+    "node": ">=18.x"
+  }
+}
