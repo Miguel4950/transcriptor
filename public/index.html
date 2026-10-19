@@ -736,9 +736,9 @@
 </head>
 <body>
   <!-- =====================================================
-       1. MODO PRINCIPAL DE INICIO: PÍLDORA DYNAMIC ISLAND
+       1. MODO PÍLDORA DYNAMIC ISLAND (SECUNDARIO EN WEB)
        ===================================================== -->
-  <div class="pill-stage" id="pillStage">
+  <div class="pill-stage hidden-stage" id="pillStage">
     <div class="dynamic-island" id="dynamicIsland">
       <div class="island-left" id="pillDragHandle" title="Arrastra la píldora">
         <div class="orb-box">
@@ -757,7 +757,7 @@
         <button class="btn-apple btn-white pill-circle-btn" id="btnPillRecord" title="Empezar / Finalizar" style="color: var(--apple-red);">●</button>
         <button class="btn-apple btn-dark pill-circle-btn" id="btnPillContinue" title="Seguir Grabando / Pausar">+</button>
         <button class="btn-apple btn-dark pill-copy-btn" id="btnPillCopy" title="Copiar todo al portapapeles">Copiar</button>
-        <button class="btn-apple btn-dark pill-circle-btn" id="btnPillExpand" title="Abrir Modo Grande">↗</button>
+        <button class="btn-apple btn-dark pill-circle-btn" id="btnPillExpand" title="Volver a Modo Grande">↗</button>
       </div>
     </div>
 
@@ -777,23 +777,10 @@
     <div class="island-toast" id="islandToast" title="Toca para copiar al portapapeles"></div>
   </div>
 
-  <!-- Barra inferior con acceso a Instalar App (Android / Honor Pad 9), Clave API y Modo Grande -->
-  <div class="minimal-backdrop-hint" id="pillFooterBar">
-    <button class="btn-apple btn-chip" id="btnInstallPwa" style="display: none; border-color: var(--apple-green); color: var(--apple-green);">
-      📲 Instalar App
-    </button>
-    <button class="btn-apple btn-chip" id="btnPillOpenKey">
-      Clave API: <span id="lblPillKeyState">...</span>
-    </button>
-    <button class="btn-apple btn-chip" id="btnPillOpenFull">
-      ↗ Modo Grande
-    </button>
-  </div>
-
   <!-- =====================================================
-       2. MODO GRANDE (ESTUDIO ADAPTATIVO MÓVIL Y TABLET)
+       2. MODO GRANDE PRINCIPAL (SIEMPRE INICIA AQUÍ EN LA WEB)
        ===================================================== -->
-  <main class="full-wrapper" id="fullWrapper">
+  <main class="full-wrapper active-full" id="fullWrapper">
     <header class="top-bar">
       <div class="brand">
         <span class="brand-dot"></span>
@@ -975,8 +962,6 @@
     const btnQuickCopy = document.getElementById('btnQuickCopy');
     const btnQuickShare = document.getElementById('btnQuickShare');
     const islandToast = document.getElementById('islandToast');
-    const pillFooterBar = document.getElementById('pillFooterBar');
-    const btnInstallPwa = document.getElementById('btnInstallPwa');
 
     const fullWrapper = document.getElementById('fullWrapper');
     const statusTitleText = document.getElementById('statusTitleText');
@@ -997,8 +982,6 @@
     const btnPillContinue = document.getElementById('btnPillContinue');
     const btnPillCopy = document.getElementById('btnPillCopy');
     const btnPillExpand = document.getElementById('btnPillExpand');
-    const btnPillOpenFull = document.getElementById('btnPillOpenFull');
-    const btnPillOpenKey = document.getElementById('btnPillOpenKey');
 
     const settingsModal = document.getElementById('settingsModal');
     const btnOpenSettings = document.getElementById('btnOpenSettings');
@@ -1008,7 +991,6 @@
     const inputApiKey = document.getElementById('inputApiKey');
     const modalKeyBanner = document.getElementById('modalKeyBanner');
     const lblKeyState = document.getElementById('lblKeyState');
-    const lblPillKeyState = document.getElementById('lblPillKeyState');
 
     // Vibración háptica sutil para Android / Honor Pad 9
     function triggerHaptic(ms = 14) {
@@ -1017,26 +999,21 @@
       } catch (e) {}
     }
 
-    // Registro de Service Worker e instalación nativa PWA en Android / Honor Pad 9
+    // Limpiar cachés antiguos y actualizar Service Worker para que siempre cargue la versión fresca
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        if ('caches' in window) {
+          caches.keys().then((keys) => {
+            keys.forEach((k) => {
+              if (k !== 'transcriptor-apple-black-v4') caches.delete(k);
+            });
+          }).catch(() => {});
+        }
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          reg.update().catch(() => {});
+        }).catch(() => {});
       });
     }
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredInstallPrompt = e;
-      btnInstallPwa.style.display = 'inline-flex';
-    });
-
-    btnInstallPwa.addEventListener('click', async () => {
-      if (!deferredInstallPrompt) return;
-      deferredInstallPrompt.prompt();
-      await deferredInstallPrompt.userChoice.catch(() => {});
-      deferredInstallPrompt = null;
-      btnInstallPwa.style.display = 'none';
-    });
 
     function getLocalApiKey() {
       return (localStorage.getItem(STORAGE_KEY_NAME) || '').trim();
@@ -1059,17 +1036,14 @@
       const localKey = getLocalApiKey();
       if (localKey) {
         lblKeyState.textContent = 'Activa';
-        lblPillKeyState.textContent = 'Activa';
         modalKeyBanner.textContent = '✓ Clave guardada en este dispositivo (' + localKey.slice(0, 7) + '...)';
         modalKeyBanner.style.color = '#30d158';
       } else if (serverHasApiKey) {
         lblKeyState.textContent = 'Cloud';
-        lblPillKeyState.textContent = 'Cloud';
         modalKeyBanner.textContent = '✓ Conectado mediante GROQ_API_KEY en Vercel.';
         modalKeyBanner.style.color = '#30d158';
       } else {
         lblKeyState.textContent = 'Configurar';
-        lblPillKeyState.textContent = 'Configurar';
         modalKeyBanner.textContent = 'Pega tu clave de Groq (gsk_...) abajo para guardarla en tu dispositivo.';
         modalKeyBanner.style.color = '#ff9f0a';
       }
@@ -1082,7 +1056,6 @@
     }
 
     btnOpenSettings.addEventListener('click', openKeyModal);
-    btnPillOpenKey.addEventListener('click', openKeyModal);
     btnCloseModal.addEventListener('click', () => settingsModal.classList.remove('open'));
 
     btnSaveKey.addEventListener('click', () => {
@@ -1749,7 +1722,6 @@
     function switchToFullMode() {
       triggerHaptic(12);
       pillStage.classList.add('hidden-stage');
-      pillFooterBar.classList.add('hidden');
       fullWrapper.classList.add('active-full');
     }
 
@@ -1757,11 +1729,9 @@
       triggerHaptic(12);
       fullWrapper.classList.remove('active-full');
       pillStage.classList.remove('hidden-stage');
-      pillFooterBar.classList.remove('hidden');
     }
 
     btnPillExpand.addEventListener('click', switchToFullMode);
-    btnPillOpenFull.addEventListener('click', switchToFullMode);
     btnReturnToPill.addEventListener('click', switchToPillMode);
 
     // Arrastre universal con Pointer Events (Soporta Dedo, Lápiz Óptico de Honor Pad 9 y Mouse)

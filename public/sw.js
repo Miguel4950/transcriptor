@@ -1,5 +1,5 @@
 // Service Worker para permitir instalación PWA nativa en Android (Honor Pad 9) e iOS
-const CACHE_NAME = 'transcriptor-apple-black-v2';
+const CACHE_NAME = 'transcriptor-apple-black-v4';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
