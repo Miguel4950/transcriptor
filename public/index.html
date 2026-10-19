@@ -2,8 +2,9 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Transcriptor" />
@@ -44,15 +45,16 @@
       min-height: 100dvh;
       background-color: var(--bg-pure);
       color: var(--text-white);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
       user-select: none;
       -webkit-user-select: none;
+      touch-action: manipulation;
     }
 
     /* =====================================================
-       MODO PRINCIPAL: DYNAMIC ISLAND (MODO PÍLDORA PRIMARIO)
+       1. MODO PÍLDORA (DYNAMIC ISLAND - VISTA PRINCIPAL)
        ===================================================== */
     .pill-stage {
       position: fixed;
@@ -63,9 +65,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 10px;
-      width: calc(100vw - 16px);
-      max-width: 470px;
+      gap: 12px;
+      width: calc(100vw - 20px);
+      max-width: 520px;
       pointer-events: none;
       transition: opacity 0.28s var(--spring-smooth), transform 0.34s var(--spring-bounce);
     }
@@ -81,16 +83,16 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 10px;
       width: 100%;
-      max-width: 424px;
-      height: 58px;
-      padding: 0 10px 0 14px;
+      max-width: 448px;
+      height: 62px;
+      padding: 0 10px 0 16px;
       border-radius: 999px;
       background: var(--bg-pill);
       border: 1px solid var(--border-highlight);
       box-shadow:
-        0 20px 48px rgba(0, 0, 0, 0.92),
+        0 20px 50px rgba(0, 0, 0, 0.92),
         inset 0 1px 0 rgba(255, 255, 255, 0.08);
       touch-action: none;
       transition:
@@ -102,28 +104,24 @@
     }
 
     @keyframes islandEntrance {
-      0% { opacity: 0; transform: scale(0.82) translateY(-14px); }
+      0% { opacity: 0; transform: scale(0.84) translateY(-14px); }
       100% { opacity: 1; transform: scale(1) translateY(0); }
     }
 
     .dynamic-island.expanded-state {
-      max-width: 462px;
+      max-width: 492px;
       border-color: rgba(255, 255, 255, 0.22);
-    }
-
-    .dynamic-island:hover {
-      border-color: #4c4c58;
     }
 
     .island-left {
       display: flex;
       align-items: center;
-      gap: 9px;
+      gap: 10px;
       cursor: grab;
       flex-shrink: 0;
+      padding: 6px 0;
     }
 
-    /* Punto de estado con Halo Animado estilo Apple */
     .orb-box {
       position: relative;
       width: 18px;
@@ -169,7 +167,7 @@
 
     .island-timer {
       font-family: "SF Mono", "Consolas", ui-monospace, monospace;
-      font-size: 0.92rem;
+      font-size: 0.96rem;
       font-weight: 700;
       color: var(--text-white);
       line-height: 1.1;
@@ -177,7 +175,7 @@
     }
 
     .island-status {
-      font-size: 0.65rem;
+      font-size: 0.68rem;
       font-weight: 500;
       color: var(--text-muted);
       line-height: 1.1;
@@ -187,9 +185,9 @@
 
     #miniWaveCanvas {
       flex: 1;
-      min-width: 56px;
-      max-width: 105px;
-      height: 30px;
+      min-width: 54px;
+      max-width: 120px;
+      height: 32px;
       display: block;
       cursor: grab;
     }
@@ -197,19 +195,54 @@
     .island-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
       flex-shrink: 0;
     }
 
-    /* Burbuja flotante de vista previa bajo la píldora */
+    /* Tarjeta rápida bajo la píldora cuando hay texto o avisos */
+    .pill-quick-card {
+      pointer-events: auto;
+      width: 100%;
+      max-width: 448px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 14px 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      animation: islandEntrance 0.28s var(--spring-bounce) forwards;
+    }
+
+    .pill-quick-card.visible {
+      display: flex;
+    }
+
+    .pill-quick-text {
+      font-size: 0.92rem;
+      line-height: 1.48;
+      color: var(--text-white);
+      max-height: 110px;
+      overflow-y: auto;
+      user-select: text;
+      -webkit-user-select: text;
+      word-break: break-word;
+    }
+
+    .pill-quick-actions {
+      display: flex;
+      gap: 8px;
+    }
+
     .island-toast {
       pointer-events: auto;
-      max-width: 410px;
+      max-width: 430px;
       background: var(--card-bg);
       border: 1px solid var(--border-subtle);
       border-radius: 14px;
-      padding: 8px 14px;
-      font-size: 0.78rem;
+      padding: 9px 15px;
+      font-size: 0.8rem;
       color: var(--text-white);
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.75);
       opacity: 0;
@@ -226,16 +259,19 @@
       transform: translateY(0) scale(1);
     }
 
-    /* Guía sutil central cuando está solo la píldora en pantalla */
+    /* Barra inferior discreta en Modo Píldora */
     .minimal-backdrop-hint {
       position: fixed;
-      bottom: max(26px, env(safe-area-inset-bottom));
+      bottom: max(24px, env(safe-area-inset-bottom));
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
       gap: 10px;
       z-index: 10;
+      width: calc(100vw - 24px);
       transition: opacity 0.25s ease;
     }
 
@@ -245,15 +281,15 @@
     }
 
     /* =====================================================
-       BOTONES APPLE CON REBOTE SPRING
+       BOTONES APPLE TÁCTILES (MÓVIL, TABLET Y PC)
        ===================================================== */
     .btn-apple {
       appearance: none;
       -webkit-appearance: none;
       border: 1px solid var(--border-light);
-      border-radius: 15px;
+      border-radius: 16px;
       font-family: inherit;
-      font-size: 0.94rem;
+      font-size: 0.96rem;
       font-weight: 600;
       letter-spacing: -0.1px;
       padding: 15px 16px;
@@ -270,11 +306,11 @@
     }
 
     .btn-apple:hover:not(:disabled) {
-      transform: scale(1.03);
+      transform: scale(1.025);
     }
 
     .btn-apple:active:not(:disabled) {
-      transform: scale(0.91);
+      transform: scale(0.92);
     }
 
     .btn-apple:disabled {
@@ -288,18 +324,10 @@
       border-color: transparent;
     }
 
-    .btn-white:hover:not(:disabled) {
-      background: #ffffff;
-    }
-
     .btn-dark {
       background: var(--btn-dark);
       color: var(--text-white);
       border-color: rgba(255, 255, 255, 0.08);
-    }
-
-    .btn-dark:hover:not(:disabled) {
-      background: var(--btn-dark-hover);
     }
 
     .btn-red {
@@ -315,24 +343,24 @@
     }
 
     .pill-circle-btn {
-      width: 35px;
-      height: 35px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
       padding: 0;
-      font-size: 0.86rem;
+      font-size: 0.94rem;
       flex-shrink: 0;
     }
 
     .pill-copy-btn {
-      height: 35px;
-      padding: 0 13px;
+      height: 40px;
+      padding: 0 14px;
       border-radius: 999px;
-      font-size: 0.76rem;
+      font-size: 0.8rem;
     }
 
     .btn-chip {
-      padding: 7px 13px;
-      font-size: 0.76rem;
+      padding: 9px 15px;
+      font-size: 0.8rem;
       font-weight: 500;
       border-radius: 999px;
       background: var(--card-bg);
@@ -341,10 +369,10 @@
     }
 
     /* =====================================================
-       MODO GRANDE (EDITOR COMPLETO SECUNDARIO)
+       2. MODO GRANDE (ADAPTATIVO PARA MÓVIL Y TABLETS)
        ===================================================== */
     .full-wrapper {
-      max-width: 520px;
+      max-width: 540px;
       margin: 0 auto;
       min-height: 100dvh;
       display: flex;
@@ -352,7 +380,7 @@
       gap: 14px;
       padding: max(18px, env(safe-area-inset-top)) 20px max(22px, env(safe-area-inset-bottom)) 20px;
       opacity: 0;
-      transform: scale(0.91) translateY(14px);
+      transform: scale(0.92) translateY(14px);
       pointer-events: none;
       height: 0;
       min-height: 0;
@@ -369,10 +397,32 @@
       overflow: visible;
     }
 
+    .studio-grid {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .left-column {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .right-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
     .top-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
       padding: 4px 2px;
     }
 
@@ -390,7 +440,7 @@
     }
 
     .brand-title {
-      font-size: 1.08rem;
+      font-size: 1.12rem;
       font-weight: 600;
       letter-spacing: -0.2px;
       color: var(--text-white);
@@ -431,20 +481,20 @@
     }
 
     .status-title {
-      font-size: 0.96rem;
+      font-size: 0.98rem;
       font-weight: 600;
       color: var(--text-white);
     }
 
     .status-subtitle {
-      font-size: 0.78rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
       line-height: 1.35;
     }
 
     .timer-digits {
       font-family: "SF Mono", "Consolas", ui-monospace, monospace;
-      font-size: 1.85rem;
+      font-size: 1.95rem;
       font-weight: 700;
       letter-spacing: -0.5px;
       color: var(--text-white);
@@ -453,7 +503,7 @@
 
     .wave-container {
       width: 100%;
-      height: 76px;
+      height: 82px;
       background: var(--card-inner);
       border: 1px solid var(--border-light);
       border-radius: 14px;
@@ -491,7 +541,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 0.72rem;
+      font-size: 0.74rem;
       font-weight: 600;
       letter-spacing: 0.5px;
       color: var(--text-muted);
@@ -505,15 +555,15 @@
     #txtResult {
       flex: 1;
       width: 100%;
-      min-height: 170px;
+      min-height: 175px;
       background: var(--card-inner);
       color: var(--text-white);
       border: 1px solid var(--border-light);
       border-radius: 14px;
       padding: 14px;
       font-family: inherit;
-      font-size: 0.98rem;
-      line-height: 1.55;
+      font-size: 1.02rem;
+      line-height: 1.58;
       resize: none;
       outline: none;
       user-select: text;
@@ -522,15 +572,6 @@
 
     #txtResult::placeholder {
       color: var(--text-dim);
-    }
-
-    #txtResult::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    #txtResult::-webkit-scrollbar-thumb {
-      background: #2c2c34;
-      border-radius: 999px;
     }
 
     .bottom-row {
@@ -543,9 +584,80 @@
     }
 
     .btn-share {
-      width: 52px;
+      width: 54px;
       padding: 0;
       flex-shrink: 0;
+    }
+
+    /* =====================================================
+       OPTIMIZACIÓN PARA TABLETS (HONOR PAD 9 / IPAD / ANDROID)
+       ===================================================== */
+    @media (min-width: 720px) {
+      .pill-stage {
+        max-width: 600px;
+      }
+      .dynamic-island {
+        max-width: 520px;
+        height: 68px;
+        padding: 0 14px 0 20px;
+      }
+      .dynamic-island.expanded-state {
+        max-width: 560px;
+      }
+      .pill-circle-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 1.02rem;
+      }
+      .pill-copy-btn {
+        height: 44px;
+        padding: 0 18px;
+        font-size: 0.88rem;
+      }
+      .island-timer {
+        font-size: 1.08rem;
+      }
+      .island-status {
+        font-size: 0.74rem;
+      }
+      .pill-quick-card {
+        max-width: 520px;
+        padding: 18px 20px;
+      }
+      .pill-quick-text {
+        font-size: 1rem;
+        max-height: 150px;
+      }
+      .full-wrapper {
+        max-width: 680px;
+        padding: 28px 32px;
+      }
+      .btn-apple {
+        padding: 17px 20px;
+        font-size: 1.02rem;
+      }
+    }
+
+    /* Modo Horizontal (Landscape) en Honor Pad 9 y Tablets grandes: Diseño Estudio 2 Columnas */
+    @media (min-width: 840px) and (orientation: landscape) {
+      .full-wrapper {
+        max-width: 1020px;
+      }
+      .studio-grid {
+        display: grid;
+        grid-template-columns: 390px 1fr;
+        gap: 20px;
+        align-items: stretch;
+      }
+      .left-column {
+        justify-content: flex-start;
+      }
+      .wave-container {
+        height: 110px;
+      }
+      #txtResult {
+        min-height: 290px;
+      }
     }
 
     /* =====================================================
@@ -570,31 +682,31 @@
 
     .modal-card {
       width: 100%;
-      max-width: 420px;
+      max-width: 430px;
       background: var(--card-bg);
       border: 1px solid var(--border-subtle);
       border-radius: 22px;
-      padding: 22px;
+      padding: 24px;
       box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
     }
 
     .modal-title {
-      font-size: 1.02rem;
+      font-size: 1.05rem;
       font-weight: 600;
       color: var(--text-white);
       margin-bottom: 6px;
     }
 
     .modal-desc {
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       color: var(--text-muted);
       line-height: 1.45;
       margin-bottom: 14px;
     }
 
     .key-status {
-      font-size: 0.76rem;
-      padding: 9px 12px;
+      font-size: 0.78rem;
+      padding: 10px 12px;
       border-radius: 12px;
       margin-bottom: 12px;
       background: var(--card-inner);
@@ -607,10 +719,10 @@
       background: var(--card-inner);
       border: 1px solid var(--border-subtle);
       border-radius: 12px;
-      padding: 12px 14px;
+      padding: 13px 14px;
       color: var(--text-white);
       font-family: ui-monospace, monospace;
-      font-size: 0.88rem;
+      font-size: 0.92rem;
       margin-bottom: 14px;
       outline: none;
     }
@@ -642,28 +754,44 @@
       <canvas id="miniWaveCanvas"></canvas>
 
       <div class="island-actions">
-        <button class="btn-apple btn-white pill-circle-btn" id="btnPillRecord" title="Empezar / Finalizar (Alt + M)" style="color: var(--apple-red);">●</button>
+        <button class="btn-apple btn-white pill-circle-btn" id="btnPillRecord" title="Empezar / Finalizar" style="color: var(--apple-red);">●</button>
         <button class="btn-apple btn-dark pill-circle-btn" id="btnPillContinue" title="Seguir Grabando / Pausar">+</button>
         <button class="btn-apple btn-dark pill-copy-btn" id="btnPillCopy" title="Copiar todo al portapapeles">Copiar</button>
         <button class="btn-apple btn-dark pill-circle-btn" id="btnPillExpand" title="Abrir Modo Grande">↗</button>
       </div>
     </div>
 
+    <!-- Tarjeta rápida de texto transcrito directamente bajo la píldora -->
+    <div class="pill-quick-card" id="pillQuickCard">
+      <div class="pill-quick-text" id="pillQuickText"></div>
+      <div class="pill-quick-actions">
+        <button class="btn-apple btn-white" id="btnQuickCopy" style="flex: 1; padding: 11px 14px; font-size: 0.86rem; border-radius: 12px;">
+          Copiar al Portapapeles
+        </button>
+        <button class="btn-apple btn-dark" id="btnQuickShare" style="padding: 11px 14px; font-size: 0.86rem; border-radius: 12px;" title="Compartir">
+          ↗ Compartir
+        </button>
+      </div>
+    </div>
+
     <div class="island-toast" id="islandToast" title="Toca para copiar al portapapeles"></div>
   </div>
 
-  <!-- Acceso inferior discreto a Clave API y Modo Grande mientras estás en Modo Píldora -->
+  <!-- Barra inferior con acceso a Instalar App (Android / Honor Pad 9), Clave API y Modo Grande -->
   <div class="minimal-backdrop-hint" id="pillFooterBar">
+    <button class="btn-apple btn-chip" id="btnInstallPwa" style="display: none; border-color: var(--apple-green); color: var(--apple-green);">
+      📲 Instalar App
+    </button>
     <button class="btn-apple btn-chip" id="btnPillOpenKey">
       Clave API: <span id="lblPillKeyState">...</span>
     </button>
     <button class="btn-apple btn-chip" id="btnPillOpenFull">
-      ↗ Abrir Modo Grande
+      ↗ Modo Grande
     </button>
   </div>
 
   <!-- =====================================================
-       2. MODO GRANDE (SECUNDARIO, SE ABRE SI QUIERES)
+       2. MODO GRANDE (ESTUDIO ADAPTATIVO MÓVIL Y TABLET)
        ===================================================== -->
   <main class="full-wrapper" id="fullWrapper">
     <header class="top-bar">
@@ -675,61 +803,67 @@
         <button class="btn-apple btn-chip" id="btnOpenSettings">
           Clave API: <span id="lblKeyState">...</span>
         </button>
-        <button class="btn-apple btn-white" id="btnReturnToPill" style="padding: 7px 14px; font-size: 0.76rem; border-radius: 999px;">
+        <button class="btn-apple btn-white" id="btnReturnToPill" style="padding: 8px 15px; font-size: 0.78rem; border-radius: 999px;">
           ↙ Modo Píldora
         </button>
       </div>
     </header>
 
-    <section class="apple-card">
-      <div class="hero-top">
-        <div class="status-group">
-          <div class="status-row">
-            <span class="orb-dot" id="mainStatusDot"></span>
-            <span class="status-title" id="statusTitleText">Listo</span>
+    <div class="studio-grid">
+      <div class="left-column">
+        <section class="apple-card">
+          <div class="hero-top">
+            <div class="status-group">
+              <div class="status-row">
+                <span class="orb-dot" id="mainStatusDot"></span>
+                <span class="status-title" id="statusTitleText">Listo</span>
+              </div>
+              <div class="status-subtitle" id="statusSubtitle">
+                Trozos automáticos de 2 min (&lt; 22 MB) • Whisper Large v3
+              </div>
+            </div>
+            <div class="timer-digits" id="lblMainTimer">00:00</div>
           </div>
-          <div class="status-subtitle" id="statusSubtitle">
-            Trozos automáticos de 2 min (&lt; 22 MB) • Whisper Large v3
+
+          <div class="wave-container">
+            <canvas id="mainWaveCanvas"></canvas>
           </div>
-        </div>
-        <div class="timer-digits" id="lblMainTimer">00:00</div>
+        </section>
+
+        <section class="controls-row">
+          <button class="btn-apple btn-white" id="btnMainRecord">
+            Empezar Grabación
+          </button>
+          <button class="btn-apple btn-dark" id="btnMainContinue">
+            Seguir Grabando
+          </button>
+        </section>
       </div>
 
-      <div class="wave-container">
-        <canvas id="mainWaveCanvas"></canvas>
+      <div class="right-column">
+        <section class="apple-card transcript-card">
+          <div class="transcript-header">
+            <div class="transcript-meta">
+              <span>TRANSCRIPCIÓN</span>
+              <span class="word-count" id="lblWordCount">• 0 palabras</span>
+            </div>
+            <button class="btn-apple btn-chip" id="btnClearText" style="padding: 5px 12px; font-size: 0.74rem;">
+              Limpiar
+            </button>
+          </div>
+          <textarea id="txtResult" placeholder="Tu transcripción aparecerá aquí..."></textarea>
+        </section>
+
+        <section class="bottom-row">
+          <button class="btn-apple btn-dark btn-copy-main" id="btnMainCopy">
+            Copiar al Portapapeles
+          </button>
+          <button class="btn-apple btn-dark btn-share" id="btnShareDevice" title="Compartir">
+            ↗
+          </button>
+        </section>
       </div>
-    </section>
-
-    <section class="controls-row">
-      <button class="btn-apple btn-white" id="btnMainRecord">
-        Empezar Grabación
-      </button>
-      <button class="btn-apple btn-dark" id="btnMainContinue">
-        Seguir Grabando
-      </button>
-    </section>
-
-    <section class="apple-card transcript-card">
-      <div class="transcript-header">
-        <div class="transcript-meta">
-          <span>TRANSCRIPCIÓN</span>
-          <span class="word-count" id="lblWordCount">• 0 palabras</span>
-        </div>
-        <button class="btn-apple btn-chip" id="btnClearText" style="padding: 4px 10px; font-size: 0.72rem;">
-          Limpiar
-        </button>
-      </div>
-      <textarea id="txtResult" placeholder="Tu transcripción aparecerá aquí..."></textarea>
-    </section>
-
-    <section class="bottom-row">
-      <button class="btn-apple btn-dark btn-copy-main" id="btnMainCopy">
-        Copiar al Portapapeles
-      </button>
-      <button class="btn-apple btn-dark btn-share" id="btnShareIos" title="Compartir">
-        ↗
-      </button>
-    </section>
+    </div>
   </main>
 
   <!-- =====================================================
@@ -739,14 +873,14 @@
     <div class="modal-card">
       <div class="modal-title">Clave API de Groq</div>
       <div class="modal-desc">
-        Tu clave nunca se guarda en el código. Puedes usar la variable <code>GROQ_API_KEY</code> en Vercel o pegarla aquí una sola vez para guardarla en tu dispositivo.
+        Tu clave nunca se guarda en el código. Puedes usar la variable <code>GROQ_API_KEY</code> en Vercel o pegarla aquí una sola vez para guardarla en este dispositivo (iPhone, Honor Pad 9, Android o PC).
       </div>
       <div class="key-status" id="modalKeyBanner">Comprobando...</div>
       <input type="password" class="key-input" id="inputApiKey" placeholder="gsk_..." autocomplete="off" spellcheck="false" />
       <div class="modal-actions">
         <button class="btn-apple btn-chip" id="btnClearKey">Borrar local</button>
         <button class="btn-apple btn-chip" id="btnCloseModal">Cerrar</button>
-        <button class="btn-apple btn-white" id="btnSaveKey" style="padding: 8px 16px; font-size: 0.82rem; border-radius: 999px;">Guardar</button>
+        <button class="btn-apple btn-white" id="btnSaveKey" style="padding: 9px 18px; font-size: 0.84rem; border-radius: 999px;">Guardar</button>
       </div>
     </div>
   </div>
@@ -768,6 +902,7 @@
     let lastResumeTimestamp = 0;
     let timerInterval = null;
     let toastTimeout = null;
+    let deferredInstallPrompt = null;
 
     let mediaStream = null;
     let audioContext = null;
@@ -788,8 +923,13 @@
     const pillStatusDot = document.getElementById('pillStatusDot');
     const lblPillTimer = document.getElementById('lblPillTimer');
     const lblPillState = document.getElementById('lblPillState');
+    const pillQuickCard = document.getElementById('pillQuickCard');
+    const pillQuickText = document.getElementById('pillQuickText');
+    const btnQuickCopy = document.getElementById('btnQuickCopy');
+    const btnQuickShare = document.getElementById('btnQuickShare');
     const islandToast = document.getElementById('islandToast');
     const pillFooterBar = document.getElementById('pillFooterBar');
+    const btnInstallPwa = document.getElementById('btnInstallPwa');
 
     const fullWrapper = document.getElementById('fullWrapper');
     const statusTitleText = document.getElementById('statusTitleText');
@@ -802,7 +942,7 @@
     const btnMainRecord = document.getElementById('btnMainRecord');
     const btnMainContinue = document.getElementById('btnMainContinue');
     const btnMainCopy = document.getElementById('btnMainCopy');
-    const btnShareIos = document.getElementById('btnShareIos');
+    const btnShareDevice = document.getElementById('btnShareDevice');
     const btnClearText = document.getElementById('btnClearText');
     const btnReturnToPill = document.getElementById('btnReturnToPill');
 
@@ -822,6 +962,34 @@
     const modalKeyBanner = document.getElementById('modalKeyBanner');
     const lblKeyState = document.getElementById('lblKeyState');
     const lblPillKeyState = document.getElementById('lblPillKeyState');
+
+    // Vibración háptica sutil para Android / Honor Pad 9
+    function triggerHaptic(ms = 14) {
+      try {
+        if (navigator.vibrate) navigator.vibrate(ms);
+      } catch (e) {}
+    }
+
+    // Registro de Service Worker e instalación nativa PWA en Android / Honor Pad 9
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      btnInstallPwa.style.display = 'inline-flex';
+    });
+
+    btnInstallPwa.addEventListener('click', async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice.catch(() => {});
+      deferredInstallPrompt = null;
+      btnInstallPwa.style.display = 'none';
+    });
 
     function getLocalApiKey() {
       return (localStorage.getItem(STORAGE_KEY_NAME) || '').trim();
@@ -855,7 +1023,7 @@
       } else {
         lblKeyState.textContent = 'Configurar';
         lblPillKeyState.textContent = 'Configurar';
-        modalKeyBanner.textContent = 'Pega tu clave de Groq (gsk_...) abajo para guardarla en este dispositivo.';
+        modalKeyBanner.textContent = 'Pega tu clave de Groq (gsk_...) abajo para guardarla en tu dispositivo.';
         modalKeyBanner.style.color = '#ff9f0a';
       }
     }
@@ -897,6 +1065,17 @@
 
     islandToast.addEventListener('click', copyTextWithUserGesture);
 
+    function syncQuickCard() {
+      const t = txtResult.value.trim();
+      if (t) {
+        pillQuickText.textContent = t;
+        pillQuickCard.classList.add('visible');
+      } else {
+        pillQuickText.textContent = '';
+        pillQuickCard.classList.remove('visible');
+      }
+    }
+
     async function requestWakeLock() {
       if ('wakeLock' in navigator) {
         try { wakeLockSentinel = await navigator.wakeLock.request('screen'); } catch (e) {}
@@ -909,6 +1088,13 @@
         wakeLockSentinel = null;
       }
     }
+
+    // Re-adquirir Wake Lock si el usuario cambia de pestaña y vuelve en tablet/móvil
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isRecording && !isPaused) {
+        requestWakeLock();
+      }
+    });
 
     function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
       if (outputSampleRate === inputSampleRate) return buffer;
@@ -967,8 +1153,20 @@
       return new Blob([buffer], { type: 'audio/wav' });
     }
 
+    async function acquireMicrophoneStream() {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+      } catch (e) {
+        // Fallback universal para tablets Android / Honor Pad si algún filtro DSP no es soportado
+        return await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    }
+
     async function startRecordingSession(append) {
       if (isProcessing) return;
+      triggerHaptic(18);
 
       const localKey = getLocalApiKey();
       if (!localKey && !serverHasApiKey) {
@@ -983,6 +1181,7 @@
           localStorage.removeItem(STORAGE_TEXT_BACKUP);
           accumulatedMs = 0;
           updateWordCount();
+          syncQuickCard();
           updateTimerDisplay(0);
         }
 
@@ -992,9 +1191,7 @@
         maxSessionLevel = 0;
         activeChunkPromises = [];
 
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        });
+        mediaStream = await acquireMicrophoneStream();
 
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         audioContext = new AudioCtx();
@@ -1004,7 +1201,6 @@
         mediaSource = audioContext.createMediaStreamSource(mediaStream);
         processorNode = audioContext.createScriptProcessor(2048, 1, 1);
 
-        // GainNode en 0 para evitar cualquier eco en el altavoz del iPhone
         muteGainNode = audioContext.createGain();
         muteGainNode.gain.value = 0;
 
@@ -1052,13 +1248,14 @@
         syncButtonsUI();
       } catch (err) {
         cleanupAudioResources();
-        setStatus('Sin micrófono', 'Permite el uso del micrófono en tu navegador', 'err');
+        setStatus('Sin micrófono', 'Permite el uso del micrófono en el navegador', 'err');
         showIslandToast('⚠️ Permite el acceso al micrófono');
       }
     }
 
     function pauseRecordingSession() {
       if (!isRecording || isPaused) return;
+      triggerHaptic(12);
       isPaused = true;
       accumulatedMs += Date.now() - lastResumeTimestamp;
       currentAudioLevel = 0;
@@ -1068,6 +1265,7 @@
 
     async function resumeRecordingSession() {
       if (!isRecording || !isPaused) return;
+      triggerHaptic(15);
       if (audioContext && audioContext.state !== 'running') {
         try { await audioContext.resume(); } catch (e) {}
       }
@@ -1100,6 +1298,7 @@
 
     async function stopRecordingAndTranscribe() {
       if (!isRecording) return;
+      triggerHaptic(22);
 
       if (!isPaused) accumulatedMs += Date.now() - lastResumeTimestamp;
 
@@ -1156,20 +1355,16 @@
           txtResult.value = (appendMode && existing) ? (existing + ' ' + newTranscript) : newTranscript;
           localStorage.setItem(STORAGE_TEXT_BACKUP, txtResult.value);
           updateWordCount();
+          syncQuickCard();
           txtResult.scrollTop = txtResult.scrollHeight;
-
-          const preview = txtResult.value.length > 48
-            ? txtResult.value.slice(0, 48) + '…'
-            : txtResult.value;
 
           const copiedAuto = await copyTextSilently(txtResult.value);
           if (copiedAuto) {
             flashCopyFeedback();
             setStatus('Copiado', 'Listo para pegar o seguir grabando', 'done');
-            showIslandToast('✓ Copiado: ' + preview);
+            showIslandToast('✓ Copiado automáticamente al portapapeles');
           } else {
-            setStatus('Listo', 'Toca "Copiar" para llevarlo al portapapeles', 'done');
-            showIslandToast('Toca aquí o en "Copiar": ' + preview);
+            setStatus('Listo', 'Toca "Copiar al Portapapeles" abajo', 'done');
           }
         } else if (errors.length > 0) {
           setStatus('Error', errors[0], 'err');
@@ -1244,6 +1439,7 @@
     }
 
     async function copyTextWithUserGesture() {
+      triggerHaptic(15);
       const text = txtResult.value.trim();
       if (!text) {
         setStatus('Sin texto', 'Graba algo primero para copiar al portapapeles', 'pause');
@@ -1270,8 +1466,7 @@
       if (copied) {
         flashCopyFeedback();
         setStatus('Copiado', 'Todo tu texto está listo para pegar', 'done');
-        const preview = text.length > 48 ? text.slice(0, 48) + '…' : text;
-        showIslandToast('✓ Copiado: ' + preview);
+        showIslandToast('✓ Copiado al portapapeles');
       }
     }
 
@@ -1280,16 +1475,21 @@
       btnMainCopy.className = 'btn-apple btn-green btn-copy-main';
       btnPillCopy.textContent = '✓';
       btnPillCopy.className = 'btn-apple btn-green pill-copy-btn';
+      btnQuickCopy.textContent = '✓ Copiado al Portapapeles';
+      btnQuickCopy.className = 'btn-apple btn-green';
 
       setTimeout(() => {
         btnMainCopy.textContent = 'Copiar al Portapapeles';
         btnMainCopy.className = 'btn-apple btn-dark btn-copy-main';
         btnPillCopy.textContent = 'Copiar';
         btnPillCopy.className = 'btn-apple btn-dark pill-copy-btn';
+        btnQuickCopy.textContent = 'Copiar al Portapapeles';
+        btnQuickCopy.className = 'btn-apple btn-white';
       }, 1800);
     }
 
-    btnShareIos.addEventListener('click', async () => {
+    async function shareTextNative() {
+      triggerHaptic(14);
       const text = txtResult.value.trim();
       if (!text) return;
       if (navigator.share) {
@@ -1297,7 +1497,10 @@
       } else {
         await copyTextWithUserGesture();
       }
-    });
+    }
+
+    btnShareDevice.addEventListener('click', shareTextNative);
+    btnQuickShare.addEventListener('click', shareTextNative);
 
     function handleRecordToggle() {
       if (isProcessing) return;
@@ -1320,6 +1523,7 @@
 
     btnMainCopy.addEventListener('click', copyTextWithUserGesture);
     btnPillCopy.addEventListener('click', copyTextWithUserGesture);
+    btnQuickCopy.addEventListener('click', copyTextWithUserGesture);
 
     btnClearText.addEventListener('click', () => {
       txtResult.value = '';
@@ -1327,12 +1531,14 @@
       accumulatedMs = 0;
       updateTimerDisplay(0);
       updateWordCount();
+      syncQuickCard();
       setStatus('Listo', 'Trozos automáticos de 2 min • Whisper Large v3', 'idle');
     });
 
     txtResult.addEventListener('input', () => {
       localStorage.setItem(STORAGE_TEXT_BACKUP, txtResult.value);
       updateWordCount();
+      syncQuickCard();
     });
 
     function syncButtonsUI() {
@@ -1430,14 +1636,15 @@
       lblWordCount.textContent = `• ${count} palabra${count === 1 ? '' : 's'}`;
     }
 
-    // Transición suave entre Modo Píldora (Primario) y Modo Grande (Secundario)
     function switchToFullMode() {
+      triggerHaptic(12);
       pillStage.classList.add('hidden-stage');
       pillFooterBar.classList.add('hidden');
       fullWrapper.classList.add('active-full');
     }
 
     function switchToPillMode() {
+      triggerHaptic(12);
       fullWrapper.classList.remove('active-full');
       pillStage.classList.remove('hidden-stage');
       pillFooterBar.classList.remove('hidden');
@@ -1447,9 +1654,11 @@
     btnPillOpenFull.addEventListener('click', switchToFullMode);
     btnReturnToPill.addEventListener('click', switchToPillMode);
 
-    (function enablePillDrag() {
+    // Arrastre universal con Pointer Events (Soporta Dedo, Lápiz Óptico de Honor Pad 9 y Mouse)
+    // + Reajuste automático al girar la tablet entre horizontal y vertical
+    (function enableUniversalDrag() {
       const handle = document.getElementById('pillDragHandle');
-      let dragging = false, startX = 0, startY = 0, initLeft = 0, initTop = 0;
+      let dragging = false, startX = 0, startY = 0, initLeft = 0, initTop = 0, hasMovedCustom = false;
 
       function startDrag(cx, cy) {
         const rect = pillStage.getBoundingClientRect();
@@ -1457,32 +1666,38 @@
         pillStage.style.left = rect.left + 'px';
         pillStage.style.top = rect.top + 'px';
         dragging = true;
+        hasMovedCustom = true;
         startX = cx; startY = cy;
         initLeft = rect.left; initTop = rect.top;
       }
 
       function moveDrag(cx, cy) {
         if (!dragging) return;
-        const maxL = window.innerWidth - pillStage.offsetWidth - 8;
-        const maxT = window.innerHeight - 80;
+        const maxL = Math.max(8, window.innerWidth - pillStage.offsetWidth - 8);
+        const maxT = Math.max(8, window.innerHeight - 90);
         pillStage.style.left = Math.max(8, Math.min(maxL, initLeft + (cx - startX))) + 'px';
         pillStage.style.top = Math.max(8, Math.min(maxT, initTop + (cy - startY))) + 'px';
       }
 
-      handle.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
-      window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
-      window.addEventListener('mouseup', () => { dragging = false; });
+      handle.addEventListener('pointerdown', (e) => {
+        handle.setPointerCapture(e.pointerId);
+        startDrag(e.clientX, e.clientY);
+      });
+      handle.addEventListener('pointermove', (e) => moveDrag(e.clientX, e.clientY));
+      handle.addEventListener('pointerup', () => { dragging = false; });
+      handle.addEventListener('pointercancel', () => { dragging = false; });
 
-      handle.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY);
-      }, { passive: true });
-      window.addEventListener('touchmove', (e) => {
-        if (dragging && e.touches.length === 1) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
-      }, { passive: true });
-      window.addEventListener('touchend', () => { dragging = false; });
+      window.addEventListener('resize', () => {
+        if (!hasMovedCustom) return;
+        const rect = pillStage.getBoundingClientRect();
+        const maxL = Math.max(8, window.innerWidth - pillStage.offsetWidth - 8);
+        const maxT = Math.max(8, window.innerHeight - 90);
+        pillStage.style.left = Math.max(8, Math.min(maxL, rect.left)) + 'px';
+        pillStage.style.top = Math.max(8, Math.min(maxT, rect.top)) + 'px';
+      });
     })();
 
-    // Visualizador Apple Voice Memos a 60 FPS reales
+    // Visualizador Apple Voice Memos a 60/120 FPS (Soporta 120Hz de Honor Pad 9)
     const mainCanvas = document.getElementById('mainWaveCanvas');
     const miniCanvas = document.getElementById('miniWaveCanvas');
     const mainCurrent = new Array(42).fill(4);
@@ -1490,11 +1705,11 @@
     let phase = 0;
 
     function animateWaveform() {
-      phase += 0.16;
+      phase += 0.15;
       const activeRec = isRecording && !isPaused;
 
-      updateBarsArray(mainCurrent, 42, activeRec, isProcessing, 60);
-      updateBarsArray(miniCurrent, 18, activeRec, isProcessing, 22);
+      updateBarsArray(mainCurrent, 42, activeRec, isProcessing, 64);
+      updateBarsArray(miniCurrent, 18, activeRec, isProcessing, 24);
 
       if (fullWrapper.classList.contains('active-full')) {
         drawAppleBars(mainCanvas, mainCurrent, activeRec, isProcessing);
@@ -1548,7 +1763,7 @@
       const count = arr.length;
       const totalSpace = rect.width - 10;
       const step = totalSpace / count;
-      const barW = Math.max(2.4, Math.min(4.2, step * 0.5));
+      const barW = Math.max(2.4, Math.min(4.4, step * 0.5));
 
       if (processing) {
         ctx.fillStyle = 'rgba(255, 159, 10, 0.85)';
@@ -1586,6 +1801,7 @@
       if (savedText) {
         txtResult.value = savedText;
         updateWordCount();
+        syncQuickCard();
       }
       checkApiConnectionStatus();
       requestAnimationFrame(animateWaveform);

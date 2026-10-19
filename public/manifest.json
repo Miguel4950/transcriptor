@@ -1,12 +1,13 @@
 {
   "name": "Transcriptor",
   "short_name": "Transcriptor",
-  "description": "Grabadora y transcriptor de voz con Whisper Large v3 en tramos de 2 minutos.",
+  "description": "Grabadora y transcriptor de voz con Whisper Large v3 en tramos de 2 minutos para iPhone, Android, Honor Pad y PC.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "icons": [
     {
       "src": "/icon.svg",
